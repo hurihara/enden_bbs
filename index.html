@@ -419,17 +419,17 @@ async function pickEmoji(emoji){
     .from('members')
     .update({ emoji })
     .eq('id', S.me.id)
-    .select();
+    .select()
+    .single();
 
-  console.log('DATA', data);
-  console.log('ERROR', error);
+  alert(
+    'DATA: ' + JSON.stringify(data) +
+    '\nERROR: ' + JSON.stringify(error)
+  );
 
-  if(error){
-    alert(error.message);
-    return;
-  }
+  if(error)return;
 
-  S.me = data[0];
+  S.me = data;
 
   await loadMembers();
 

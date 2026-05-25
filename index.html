@@ -238,8 +238,18 @@ async function switchCh(id){
 async function addChannel(){
   const name=prompt('新しい場の名前：');
   if(!name||!name.trim())return;
-  const{data}=await sb.from('channels').insert({name:name.trim(),description:''}).select().single();
-  if(data){S.channels.push(data);await switchCh(data.id)}
+  const{data,error}=await sb.from('channels').insert({name:name.trim(),description:''}).select().single();
+  if(error){alert('場を作れませんでした：'+error.message);return}
+  if(data){
+    S.channels.push(data);
+    S.activeChId=data.id;
+    S.view='chat';
+    S.posts=[];S.kaki={};S.openKaki={};
+    render();
+    await loadPosts();
+    setupRealtime();
+    render();
+  }
 }
 
 async function deleteCh(id){

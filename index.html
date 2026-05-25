@@ -412,6 +412,7 @@ function showEmojiPicker(){
 }
 
 async function pickEmoji(emoji){
+  alert(JSON.stringify(S.me));
   const wrap=document.getElementById('emoji-overlay');
   if(wrap)wrap.remove();
 

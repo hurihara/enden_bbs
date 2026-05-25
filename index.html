@@ -37,7 +37,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 .ch-btn i{font-size:14px;flex-shrink:0}
 .add-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;display:flex;padding:1px;line-height:1}
 .add-btn:hover{color:var(--text)}
-.sb-footer{border-top:0.5px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.sb-footer{border-top:0.5px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0;cursor:pointer}
+.sb-footer:hover{background:var(--bg3)}
 .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0}
 .sb-name{font-size:12px;font-weight:500;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
@@ -129,6 +130,8 @@ const AVC=[
   {bg:'#E6F1FB',fg:'#0C447C'},{bg:'#FAEEDA',fg:'#633806'},
   {bg:'#FBEAF0',fg:'#72243E'},{bg:'#EAF3DE',fg:'#27500A'},
 ];
+const EMOJI_LIST=['😀','😄','😊','🥰','😎','🤩','😋','🤔','😴','🥺','😭','😤','🤗','👻','🐱','🐶','🐼','🦊','🐸','🦋','🌸','🌺','🌻','🌈','⭐','🌙','☀️','🍓','🍰','🎮','🎵','🎨','📚','✏️','💫','🔥','💎','🌊','🍀','🦄'];
+
 function avc(n){let h=0;for(let c of(n||''))h=(h*31+c.charCodeAt(0))%AVC.length;return AVC[h]}
 function ini(n){return(n||'?')[0].toUpperCase()}
 function ago(ts){
@@ -146,9 +149,11 @@ const S={
   pendingImg:null,pendingQuote:null,
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
-  members:[],status:null,
+  members:[],status:null,allowedNames:[],
 };
 let rtChannel=null;
+let broadcastChannel=null;
+let typingDisplayTimer=null;
 
 function applyTheme(i){
   const t=THEMES[i||0];
@@ -188,8 +193,10 @@ async function loadMembers(){
   S.members=data||[];
 }
 
-let typingTimer=null;
-let broadcastChannel=null;
+async function loadAllowedNames(){
+  const{data}=await sb.from('allowed_names').select('*').order('created_at');
+  S.allowedNames=data||[];
+}
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
@@ -205,6 +212,11 @@ function setupRealtime(){
       for(const k of(data||[])){if(!S.kaki[k.post_id])S.kaki[k.post_id]=[];S.kaki[k.post_id].push(k)}
       render();
     })
+    .on('postgres_changes',{event:'*',schema:'public',table:'members'},async()=>{
+      await loadMembers();
+      S.me=S.members.find(m=>m.name===S.me?.name)||S.me;
+      render();
+    })
     .subscribe();
 
   if(broadcastChannel)sb.removeChannel(broadcastChannel);
@@ -218,15 +230,14 @@ function setupRealtime(){
     .subscribe();
 }
 
-let typingDisplayTimer=null;
 function updateTypingDisplay(){
   const now=Date.now();
   const active=Object.entries(S.typing).filter(([n,t])=>now-t<3000).map(([n])=>n);
   const el=document.getElementById('typing-indicator');
   if(el){
-    if(active.length===0){el.textContent=''}
-    else if(active.length===1){el.textContent=`${active[0]}さんが書き入れ中…`}
-    else{el.textContent=`${active.join('、')}さんが書き入れ中…`}
+    if(active.length===0)el.textContent='';
+    else if(active.length===1)el.textContent=`${active[0]}さんが書き入れ中…`;
+    else el.textContent=`${active.join('、')}さんが書き入れ中…`;
   }
   if(typingDisplayTimer)clearTimeout(typingDisplayTimer);
   if(active.length>0)typingDisplayTimer=setTimeout(updateTypingDisplay,1000);
@@ -255,6 +266,8 @@ async function doLogin(){
   setStatus('場を読み込んでいます…');
   await loadChannels();
   await loadPosts();
+  await loadMembers();
+  S.me=S.members.find(m=>m.name===ex.name)||ex;
   setupRealtime();
   clearStatus();
 }
@@ -364,6 +377,49 @@ function openLightbox(src){
   document.body.appendChild(lb);
 }
 
+function showEmojiPicker(){
+  const existing=document.getElementById('emoji-modal');
+  if(existing){existing.remove();return}
+  const overlay=document.getElementById('emoji-overlay');
+  if(overlay){overlay.remove();return}
+  const wrap=document.createElement('div');
+  wrap.id='emoji-overlay';
+  wrap.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 70px 10px';
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;border-radius:14px;padding:14px;width:260px;box-shadow:0 4px 24px rgba(0,0,0,0.18)';
+  const title=document.createElement('div');
+  title.textContent='アイコンを選ぶ';
+  title.style.cssText='font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px';
+  box.appendChild(title);
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:10px';
+  EMOJI_LIST.forEach(e=>{
+    const btn=document.createElement('button');
+    btn.textContent=e;
+    btn.style.cssText='font-size:22px;background:none;border:none;cursor:pointer;padding:3px;border-radius:6px;line-height:1.2';
+    btn.onclick=()=>pickEmoji(e);
+    grid.appendChild(btn);
+  });
+  box.appendChild(grid);
+  const reset=document.createElement('button');
+  reset.textContent='頭文字に戻す';
+  reset.style.cssText='width:100%;font-size:12px;color:#555;background:none;border:1px solid #ccc;border-radius:8px;padding:6px;cursor:pointer';
+  reset.onclick=()=>pickEmoji('');
+  box.appendChild(reset);
+  wrap.appendChild(box);
+  wrap.onclick=(e)=>{if(e.target===wrap)wrap.remove()};
+  document.body.appendChild(wrap);
+}
+
+async function pickEmoji(emoji){
+  const wrap=document.getElementById('emoji-overlay');
+  if(wrap)wrap.remove();
+  await sb.from('members').update({emoji}).eq('name',S.me.name);
+  S.me.emoji=emoji;
+  await loadMembers();
+  render();
+}
+
 function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){
@@ -401,6 +457,7 @@ function renderLogin(){
 function renderSidebar(){
   const t=THEMES[S.themeIdx];
   const av=avc(S.me?.name||'');
+  const myEmoji=S.me?.emoji||'';
   return `
     <div class="srv-head">
       <div class="srv-icon">${S.serverIcon}</div>
@@ -424,9 +481,10 @@ function renderSidebar(){
       </button>
       ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
-    <div class="sb-footer">
-      <div class="av" style="width:28px;height:28px;font-size:11px;background:${av.bg};color:${av.fg}">${ini(S.me?.name)}</div>
+    <div class="sb-footer" onclick="showEmojiPicker()" title="アイコンを変える">
+      <div class="av" style="width:28px;height:28px;font-size:${myEmoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${myEmoji||ini(S.me?.name)}</div>
       <span class="sb-name">${S.me?.name||''}${S.me?.role==='admin'?' <span class="badge">主</span>':''}</span>
+      <i class="ti ti-mood-smile" style="font-size:13px;color:var(--text3);flex-shrink:0"></i>
     </div>`;
 }
 
@@ -481,9 +539,10 @@ function renderPost(p){
   const iHana=by.includes(S.me?.name||'');
   const kakis=S.kaki[p.id]||[];
   const openK=S.openKaki[p.id];
-  const pj=JSON.stringify(p).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  const posterMember=S.members.find(m=>m.name===p.user_name);
+  const posterEmoji=posterMember?.emoji||'';
   return `<div class="post-item" id="post-${p.id}">
-    <div class="av" style="width:32px;height:32px;font-size:12px;background:${av.bg};color:${av.fg};margin-top:2px;flex-shrink:0">${ini(p.user_name)}</div>
+    <div class="av" style="width:32px;height:32px;font-size:${posterEmoji?'18':'12'}px;background:${av.bg};color:${av.fg};margin-top:2px;flex-shrink:0">${posterEmoji||ini(p.user_name)}</div>
     <div class="post-body">
       <div class="post-meta">
         <span class="uname">${p.user_name}</span>
@@ -529,8 +588,9 @@ function renderMembers(){
     ${S.members.length===0?'<div style="color:var(--text3);font-size:13px">まだ仲間がいません</div>':''}
     ${S.members.map(m=>{
       const av=avc(m.name);
+      const me=m.emoji||'';
       return `<div class="mem-row">
-        <div class="av" style="width:34px;height:34px;font-size:13px;background:${av.bg};color:${av.fg}">${ini(m.name)}</div>
+        <div class="av" style="width:34px;height:34px;font-size:${me?'20':'13'}px;background:${av.bg};color:${av.fg}">${me||ini(m.name)}</div>
         <div style="flex:1">
           <div style="font-size:13px;color:var(--text);font-weight:${m.name===S.me?.name?'500':'400'}">${m.name}${m.name===S.me?.name?' (自分)':''}</div>
           <div style="font-size:11px;color:var(--text3)">${m.role==='admin'?'主':'縁者'}</div>
@@ -577,7 +637,7 @@ function renderSettings(){
         ${S.channels.length>1?`<button onclick="deleteCh('${ch.id}')" style="background:none;border:0.5px solid var(--danger);border-radius:7px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--danger)">閉じる</button>`:''}
       </div>`).join('')}
       <label style="margin-top:6px">縁の帳（入室許可リスト）</label>
-      <div id="allowed-list" style="margin-bottom:6px">${(S.allowedNames||[]).map(n=>`
+      <div style="margin-bottom:6px">${(S.allowedNames||[]).map(n=>`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
           <i class="ti ti-user" style="font-size:13px;color:var(--text3)"></i>
           <span style="font-size:13px;flex:1;color:var(--text)">${n.name}</span>
@@ -595,11 +655,6 @@ function renderSettings(){
       <button class="btn-p" onclick="saveSettings()">定める</button>
     </div>
   </div>`;
-}
-
-async function loadAllowedNames(){
-  const{data}=await sb.from('allowed_names').select('*').order('created_at');
-  S.allowedNames=data||[];
 }
 
 async function addAllowedName(){
@@ -621,7 +676,7 @@ async function removeAllowedName(id){
 }
 
 async function openSettings(){
-  S.view="settings";
+  S.view='settings';
   await loadAllowedNames();
   render();
 }

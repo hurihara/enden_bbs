@@ -140,7 +140,7 @@ function ago(ts){
 }
 
 const S={
-  screen:'login',me:null,
+  screen:'login',me:null,typing:{},
   channels:[],posts:[],kaki:{},
   openKaki:{},activeChId:null,
   pendingImg:null,pendingQuote:null,
@@ -188,6 +188,8 @@ async function loadMembers(){
   S.members=data||[];
 }
 
+let typingTimer=null;
+
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
   rtChannel=sb.channel('enden-rt-'+S.activeChId)
@@ -202,7 +204,32 @@ function setupRealtime(){
       for(const k of(data||[])){if(!S.kaki[k.post_id])S.kaki[k.post_id]=[];S.kaki[k.post_id].push(k)}
       render();
     })
+    .on('broadcast',{event:'typing'},(payload)=>{
+      const{name,chId}=payload.payload;
+      if(chId!==S.activeChId||name===S.me?.name)return;
+      S.typing[name]=Date.now();
+      updateTypingDisplay();
+    })
     .subscribe();
+}
+
+let typingDisplayTimer=null;
+function updateTypingDisplay(){
+  const now=Date.now();
+  const active=Object.entries(S.typing).filter(([n,t])=>now-t<3000).map(([n])=>n);
+  const el=document.getElementById('typing-indicator');
+  if(el){
+    if(active.length===0){el.textContent=''}
+    else if(active.length===1){el.textContent=`${active[0]}さんが書き入れ中…`}
+    else{el.textContent=`${active.join('、')}さんが書き入れ中…`}
+  }
+  if(typingDisplayTimer)clearTimeout(typingDisplayTimer);
+  if(active.length>0)typingDisplayTimer=setTimeout(updateTypingDisplay,1000);
+}
+
+function sendTyping(){
+  if(!rtChannel||!S.me)return;
+  rtChannel.send({type:'broadcast',event:'typing',payload:{name:S.me.name,chId:S.activeChId}});
 }
 
 async function doLogin(){
@@ -424,12 +451,13 @@ function renderChat(){
       <span class="ch-head-desc">${ch.description||''}</span>
     </div>
     <div class="posts-area" id="posts-area">${postsHtml}</div>
+    <div id="typing-indicator" style="padding:2px 14px 0;font-size:12px;color:var(--text3);min-height:18px"></div>
     <div class="compose">
       ${S.pendingImg?`<div style="padding-bottom:6px;display:flex;align-items:center;gap:6px"><img src="${S.pendingImg}" class="img-preview" alt="プレビュー"><button onclick="S.pendingImg=null;render()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text2)">取り消し</button></div>`:''}
       ${qprev}
       <div class="compose-inner">
         <textarea id="compose-text" placeholder="${ch.name}に書き付ける…" rows="1"
-          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';sendTyping()"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitPost()}"></textarea>
         <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
           <button class="ic-btn" onclick="document.getElementById('file-input').click()" title="絵を添える"><i class="ti ti-photo"></i></button>

@@ -209,6 +209,8 @@ async function doLogin(){
   const name=(document.getElementById('l-name').value||'').trim();
   if(!name){setStatus('名を記してください','err');return}
   setStatus('縁を確かめています…');
+  const{data:allowed}=await sb.from('allowed_names').select('name').eq('name',name).maybeSingle();
+  if(!allowed){setStatus('この名は縁の帳にありません。主に招いてもらってください。','err');return}
   let{data:ex}=await sb.from('members').select('*').eq('name',name).maybeSingle();
   if(!ex){
     const{data:cr,error}=await sb.from('members').insert({name,role:'member'}).select().single();
@@ -369,7 +371,7 @@ function renderSidebar(){
       <button class="ch-btn${S.view==='invite'?' active':''}" onclick="S.view='invite';render()">
         <i class="ti ti-link"></i><span class="ch-label">招縁の文</span>
       </button>
-      ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="S.view='settings';render()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
+      ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
     <div class="sb-footer">
       <div class="av" style="width:28px;height:28px;font-size:11px;background:${av.bg};color:${av.fg}">${ini(S.me?.name)}</div>
@@ -522,12 +524,51 @@ function renderSettings(){
         <span style="font-size:13px;flex:1;color:var(--text)">${ch.name}</span>
         ${S.channels.length>1?`<button onclick="deleteCh('${ch.id}')" style="background:none;border:0.5px solid var(--danger);border-radius:7px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--danger)">閉じる</button>`:''}
       </div>`).join('')}
+      <label style="margin-top:6px">縁の帳（入室許可リスト）</label>
+      <div id="allowed-list" style="margin-bottom:6px">${(S.allowedNames||[]).map(n=>`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+          <i class="ti ti-user" style="font-size:13px;color:var(--text3)"></i>
+          <span style="font-size:13px;flex:1;color:var(--text)">${n.name}</span>
+          ${n.name!==S.me?.name?`<button onclick="removeAllowedName('${n.id}')" style="background:none;border:0.5px solid var(--danger);border-radius:7px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--danger)">除く</button>`:'<span style="font-size:11px;color:var(--text3)">（自分）</span>'}
+        </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <input id="new-allowed" placeholder="追加する名前" style="flex:1;font-size:13px;padding:6px 9px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);outline:none" onkeydown="if(event.key==='Enter')addAllowedName()">
+        <button class="btn-p" onclick="addAllowedName()" style="padding:6px 12px;font-size:13px">追加</button>
+      </div>
     </div>
     <div class="fr">
       <button class="btn-g" onclick="S.view='chat';render()">もどる</button>
       <button class="btn-p" onclick="saveSettings()">定める</button>
     </div>
   </div>`;
+}
+
+async function loadAllowedNames(){
+  const{data}=await sb.from('allowed_names').select('*').order('created_at');
+  S.allowedNames=data||[];
+}
+
+async function addAllowedName(){
+  const inp=document.getElementById('new-allowed');
+  const name=(inp?.value||'').trim();
+  if(!name)return;
+  const{data,error}=await sb.from('allowed_names').insert({name}).select().single();
+  if(error){alert('すでに登録されているか、エラーが発生しました');return}
+  inp.value='';
+  await loadAllowedNames();render();
+}
+
+async function removeAllowedName(id){
+  if(!confirm('この名を帳から除きますか？'))return;
+  await sb.from('allowed_names').delete().eq('id',id);
+  await loadAllowedNames();render();
+}
+
+async function openSettings(){
+  S.view="settings";
+  await loadAllowedNames();
+  render();
 }
 
 function saveSettings(){

@@ -418,7 +418,7 @@ async function pickEmoji(emoji){
   const result = await sb
     .from('members')
     .update({ emoji })
-    .eq('id', S.me.id)
+    .eq('name', S.me.name)
     .select();
 
   alert(JSON.stringify(result));

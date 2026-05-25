@@ -560,7 +560,9 @@ function renderPost(p){
         <span class="uname">${p.user_name}</span>
         ${p.user_role==='admin'?'<span class="badge">主</span>':''}
         <span class="ts">${ago(p.created_at)}</span>
-        ${S.me?.role==='admin' || p.user_name===S.me?.name ?`<button onclick="deletePost('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
+        ${(S.me?.role==='admin' || p.user_name===S.me?.name) ? `
+        <button onclick="deletePost('${p.id}')" 
+        style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
       </div>
       ${p.quote?`<div class="quote-blk"><span class="quote-author">${p.quote.user_name}</span>${(p.quote.text||'').slice(0,60)}${(p.quote.text||'').length>60?'…':''}</div>`:''}
       ${p.text?`<div class="post-text">${p.text}</div>`:''}

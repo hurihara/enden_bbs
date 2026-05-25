@@ -103,12 +103,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 #file-input{display:none}
 .img-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:999;cursor:pointer}
 .img-lightbox img{max-width:90vw;max-height:90vh;border-radius:var(--radius-lg)}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:flex;align-items:center;justify-content:center}
-.modal-box{background:var(--bg);border-radius:var(--radius-lg);padding:16px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
-.modal-box h4{font-size:14px;font-weight:500;color:var(--text);margin-bottom:10px}
-.emoji-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:10px}
-.emoji-grid button{background:none;border:none;font-size:22px;cursor:pointer;padding:4px;border-radius:6px;line-height:1}
-.emoji-grid button:hover{background:var(--bg2)}
 </style>
 </head>
 <body>
@@ -153,7 +147,6 @@ const S={
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,
-  allowedNames:[]
 };
 let rtChannel=null;
 
@@ -262,8 +255,6 @@ async function doLogin(){
   setStatus('場を読み込んでいます…');
   await loadChannels();
   await loadPosts();
-  await loadMembers();
-  S.me=S.members.find(m=>m.name===ex.name)||ex;
   setupRealtime();
   clearStatus();
 }
@@ -353,7 +344,7 @@ async function changeRole(name,role){
 }
 
 async function kickMember(name){
-  if(!confirm(`${name}さんを场から除きますか？`))return;
+  if(!confirm(`${name}さんを場から除きますか？`))return;
   await sb.from('members').delete().eq('name',name);
   await loadMembers();render();
 }
@@ -402,7 +393,7 @@ function renderLogin(){
         <label>合言葉（設定されている場合）</label>
         <input id="l-pass" type="password" placeholder="合言葉を入力" style="font-size:15px;padding:10px 12px" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
-      <button class="btn-p" onclick="doLogin()" style="width:100%;padding:10px;font-size:15px">场に入る</button>
+      <button class="btn-p" onclick="doLogin()" style="width:100%;padding:10px;font-size:15px">場に入る</button>
     </div>
   </div>`;
 }
@@ -433,10 +424,9 @@ function renderSidebar(){
       </button>
       ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
-    <div class="sb-footer" style="cursor:pointer" onclick="toggleEmojiPicker()" title="アイコンを変える">
-      <div class="av" style="width:28px;height:28px;font-size:${S.me?.emoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${S.me?.emoji||ini(S.me?.name)}</div>
+    <div class="sb-footer">
+      <div class="av" style="width:28px;height:28px;font-size:11px;background:${av.bg};color:${av.fg}">${ini(S.me?.name)}</div>
       <span class="sb-name">${S.me?.name||''}${S.me?.role==='admin'?' <span class="badge">主</span>':''}</span>
-      <i class="ti ti-mood-smile" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>
     </div>`;
 }
 
@@ -491,10 +481,9 @@ function renderPost(p){
   const iHana=by.includes(S.me?.name||'');
   const kakis=S.kaki[p.id]||[];
   const openK=S.openKaki[p.id];
-  const posterMember=S.members.find(m=>m.name===p.user_name);
-  const posterEmoji=posterMember?.emoji||'';
+  const pj=JSON.stringify(p).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
   return `<div class="post-item" id="post-${p.id}">
-    <div class="av" style="width:32px;height:32px;font-size:${posterEmoji?'18':'12'}px;background:${av.bg};color:${av.fg};margin-top:2px;flex-shrink:0">${posterEmoji||ini(p.user_name)}</div>
+    <div class="av" style="width:32px;height:32px;font-size:12px;background:${av.bg};color:${av.fg};margin-top:2px;flex-shrink:0">${ini(p.user_name)}</div>
     <div class="post-body">
       <div class="post-meta">
         <span class="uname">${p.user_name}</span>
@@ -541,7 +530,7 @@ function renderMembers(){
     ${S.members.map(m=>{
       const av=avc(m.name);
       return `<div class="mem-row">
-        <div class="av" style="width:34px;height:34px;font-size:${m.emoji?'20':'13'}px;background:${av.bg};color:${av.fg}">${m.emoji||ini(m.name)}</div>
+        <div class="av" style="width:34px;height:34px;font-size:13px;background:${av.bg};color:${av.fg}">${ini(m.name)}</div>
         <div style="flex:1">
           <div style="font-size:13px;color:var(--text);font-weight:${m.name===S.me?.name?'500':'400'}">${m.name}${m.name===S.me?.name?' (自分)':''}</div>
           <div style="font-size:11px;color:var(--text3)">${m.role==='admin'?'主':'縁者'}</div>
@@ -645,46 +634,7 @@ function saveSettings(){
   S.view='chat';render();
 }
 
-function toggleEmojiPicker(){
-  if(document.getElementById('emoji-modal')){
-    document.getElementById('emoji-modal').remove();
-    return;
-  }
-  const emojis = ['🏮','🌸','🦊','🍡','🍵','👺','⛩️','🎐','🌊','🌙','🎋','🎲','🎨','🐾','🐱','🐰','✨','🔥','💻','🎯'];
-  
-  const div = document.createElement('div');
-  div.id = 'emoji-modal';
-  div.className = 'modal-overlay';
-  div.onclick = (e) => { if(e.target === div) div.remove(); };
-  div.innerHTML = `
-    <div class="modal-box">
-      <h4>己の印（絵文字）を選ぶ</h4>
-      <div class="emoji-grid">
-        ${emojis.map(e => `<button onclick="updateMyEmoji('${e}')">${e}</button>`).join('')}
-      </div>
-      <button class="btn-g" style="width:100%; font-size:12px; padding:6px;" onclick="document.getElementById('emoji-modal').remove()">閉じる</button>
-    </div>
-  `;
-  document.body.appendChild(div);
-}
-
-async function updateMyEmoji(emoji){
-  if(!S.me) return;
-  const { error } = await sb.from('members').update({ emoji }).eq('name', S.me.name);
-  if(!error){
-    S.me.emoji = emoji;
-    const modal = document.getElementById('emoji-modal');
-    if(modal) modal.remove();
-    await loadMembers();
-    await loadPosts();
-    render();
-  } else {
-    alert('印を刻めませんでした：' + error.message);
-  }
-}
-
-window.onload = () => {
-  render();
-};
-</script></body>
+render();
+</script>
+</body>
 </html>

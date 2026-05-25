@@ -415,27 +415,24 @@ async function pickEmoji(emoji){
   const wrap=document.getElementById('emoji-overlay');
   if(wrap)wrap.remove();
 
-  const { data, error } = await sb
+  const result = await sb
     .from('members')
     .update({ emoji })
     .eq('id', S.me.id)
-    .select()
-    .single();
+    .select();
 
-  alert(
-    'DATA: ' + JSON.stringify(data) +
-    '\nERROR: ' + JSON.stringify(error)
-  );
+  alert(JSON.stringify(result));
 
-  if(error)return;
+  if(result.error){
+    return;
+  }
 
-  S.me = data;
+  S.me = result.data[0];
 
   await loadMembers();
 
   render();
-}
-  
+}  
   function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){

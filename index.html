@@ -143,6 +143,7 @@ function ago(ts){
 }
 
 const S={
+  unreadChannels: [],
   screen:'login',me:null,typing:{},
   unreadChannels:{},
   channels:[],posts:[],kaki:{},
@@ -202,15 +203,32 @@ async function loadAllowedNames(){
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
   rtChannel=sb.channel('enden-rt-'+S.activeChId)
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts',filter:`channel_id=eq.${S.activeChId}`},async(payload)=>{
-  if(payload.new.channel_id !== S.activeChId){
-    S.unreadChannels[payload.new.channel_id]=true;
-  }else{
-    await loadPosts();
-  }
+   .on(
+  'postgres_changes',
+  {
+    event:'INSERT',
+    schema:'public',
+    table:'posts'
+  },
+  async(payload)=>{
 
-  render();
-})
+    const newPost = payload.new;
+
+    if(newPost.channel_id !== S.activeChId){
+
+      if(!S.unreadChannels.includes(newPost.channel_id)){
+        S.unreadChannels.push(newPost.channel_id);
+      }
+
+    }else{
+
+      await loadPosts();
+
+    }
+
+    render();
+  }
+)
     .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
       if(!S.posts.length)return;
       const ids=S.posts.map(p=>p.id);
@@ -281,7 +299,9 @@ async function doLogin(){
 
 async function switchCh(id){
   delete S.unreadChannels[id];
-  S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
+  S.activeChId=id;
+  S.unreadChannels = S.unreadChannels.filter(c=>c !== id);
+  S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
   render();
   await loadPosts();
   setupRealtime();
@@ -488,12 +508,12 @@ function renderSidebar(){
         <span class="sec-label-text ch-label">場</span>
         ${S.me?.role==='admin'?`<button class="add-btn" onclick="addChannel()" title="場を追加"><i class="ti ti-plus"></i></button>`:''}
       </div>
-      ${S.channels.map(ch=>`
-        <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
-          <i class="ti ti-hash"></i><span class="ch-label">
-  ${ch.name}${S.unreadChannels[ch.id] ? ' ●' : ''}
-</span>
-        </button>`).join('')}
+     ${S.channels.map(ch=>`
+  <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
+    <i class="ti ti-hash"></i><span class="ch-label">
+      ${ch.name}${S.unreadChannels.includes(ch.id) ? ' ●' : ''}
+    </span>
+    </button>`).join('')}
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
       <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">
         <i class="ti ti-users"></i><span class="ch-label">交友</span>

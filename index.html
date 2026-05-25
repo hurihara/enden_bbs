@@ -258,6 +258,8 @@ async function doLogin(){
   setStatus('場を読み込んでいます…');
   await loadChannels();
   await loadPosts();
+  await loadMembers();
+  S.me=S.members.find(m=>m.name===ex.name)||ex;
   setupRealtime();
   clearStatus();
 }

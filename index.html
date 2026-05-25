@@ -418,22 +418,25 @@ async function pickEmoji(emoji){
   const { data, error } = await sb
     .from('members')
     .update({ emoji })
-    .eq('name', S.me.name)
-    .select()
-    .single();
+    .eq('id', S.me.id)
+    .select();
+
+  console.log('DATA', data);
+  console.log('ERROR', error);
 
   if(error){
-    console.error(error);
+    alert(error.message);
     return;
   }
 
-  S.me = data;
+  S.me = data[0];
 
   await loadMembers();
 
   render();
 }
-function render(){
+  
+  function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){
     document.getElementById('sidebar').innerHTML='';

@@ -429,12 +429,12 @@ function renderSidebar(){
       </button>
       ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
+    ${S.emojiPicker?renderEmojiPicker():''}
     <div class="sb-footer" style="cursor:pointer" onclick="toggleEmojiPicker()" title="アイコンを変える">
       <div class="av" style="width:28px;height:28px;font-size:${S.me?.emoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${S.me?.emoji||ini(S.me?.name)}</div>
       <span class="sb-name">${S.me?.name||''}${S.me?.role==='admin'?' <span class="badge">主</span>':''}</span>
       <i class="ti ti-mood-smile" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>
-    </div>
-    ${S.emojiPicker?renderEmojiPicker():''}`;
+    </div>`;
 }
 
 function renderMain(){

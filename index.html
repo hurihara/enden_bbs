@@ -415,13 +415,14 @@ function showEmojiPicker(){
 
 async function pickEmoji(emoji){
   alert("選ばれた絵文字: " + emoji);
+  console.log("保存するemoji:", emoji);
   alert(JSON.stringify(S.me));
   const wrap=document.getElementById('emoji-overlay');
   if(wrap)wrap.remove();
 
   const result = await sb
     .from('members')
-    .update({ emoji })
+    .update({ emoji: emoji })
     .eq('name', S.me.name)
     .select();
 

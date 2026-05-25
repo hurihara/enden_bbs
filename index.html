@@ -103,6 +103,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 #file-input{display:none}
 .img-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:999;cursor:pointer}
 .img-lightbox img{max-width:90vw;max-height:90vh;border-radius:var(--radius-lg)}
+.emoji-picker{position:fixed;bottom:70px;left:10px;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius-lg);padding:10px;z-index:100;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;box-shadow:0 4px 20px rgba(0,0,0,.15);max-width:240px}
+.emoji-picker button{background:none;border:none;font-size:20px;cursor:pointer;padding:4px;border-radius:6px;line-height:1}
+.emoji-picker button:hover{background:var(--bg2)}
 </style>
 </head>
 <body>
@@ -140,7 +143,7 @@ function ago(ts){
 }
 
 const S={
-  screen:'login',me:null,typing:{},
+  screen:'login',me:null,typing:{},emojiPicker:false,
   channels:[],posts:[],kaki:{},
   openKaki:{},activeChId:null,
   pendingImg:null,pendingQuote:null,
@@ -424,10 +427,12 @@ function renderSidebar(){
       </button>
       ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
-    <div class="sb-footer">
-      <div class="av" style="width:28px;height:28px;font-size:11px;background:${av.bg};color:${av.fg}">${ini(S.me?.name)}</div>
+    <div class="sb-footer" style="cursor:pointer" onclick="toggleEmojiPicker()" title="アイコンを変える">
+      <div class="av" style="width:28px;height:28px;font-size:${S.me?.emoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${S.me?.emoji||ini(S.me?.name)}</div>
       <span class="sb-name">${S.me?.name||''}${S.me?.role==='admin'?' <span class="badge">主</span>':''}</span>
-    </div>`;
+      <i class="ti ti-mood-smile" style="font-size:14px;color:var(--text3);flex-shrink:0"></i>
+    </div>
+    ${S.emojiPicker?renderEmojiPicker():''}`;
 }
 
 function renderMain(){
@@ -482,8 +487,10 @@ function renderPost(p){
   const kakis=S.kaki[p.id]||[];
   const openK=S.openKaki[p.id];
   const pj=JSON.stringify(p).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  const posterMember=S.members.find(m=>m.name===p.user_name);
+  const posterEmoji=posterMember?.emoji||'';
   return `<div class="post-item" id="post-${p.id}">
-    <div class="av" style="width:32px;height:32px;font-size:12px;background:${av.bg};color:${av.fg};margin-top:2px;flex-shrink:0">${ini(p.user_name)}</div>
+    <div class="av" style="width:32px;height:32px;font-size:${posterEmoji?'18':'12'}px;background:${av.bg};color:${av.fg};margin-top:2px;flex-shrink:0">${posterEmoji||ini(p.user_name)}</div>
     <div class="post-body">
       <div class="post-meta">
         <span class="uname">${p.user_name}</span>
@@ -530,7 +537,7 @@ function renderMembers(){
     ${S.members.map(m=>{
       const av=avc(m.name);
       return `<div class="mem-row">
-        <div class="av" style="width:34px;height:34px;font-size:13px;background:${av.bg};color:${av.fg}">${ini(m.name)}</div>
+        <div class="av" style="width:34px;height:34px;font-size:${m.emoji?'20':'13'}px;background:${av.bg};color:${av.fg}">${m.emoji||ini(m.name)}</div>
         <div style="flex:1">
           <div style="font-size:13px;color:var(--text);font-weight:${m.name===S.me?.name?'500':'400'}">${m.name}${m.name===S.me?.name?' (自分)':''}</div>
           <div style="font-size:11px;color:var(--text3)">${m.role==='admin'?'主':'縁者'}</div>

@@ -414,12 +414,25 @@ function showEmojiPicker(){
 async function pickEmoji(emoji){
   const wrap=document.getElementById('emoji-overlay');
   if(wrap)wrap.remove();
-  await sb.from('members').update({emoji}).eq('name',S.me.name);
-  S.me.emoji=emoji;
+
+  const { data, error } = await sb
+    .from('members')
+    .update({ emoji })
+    .eq('name', S.me.name)
+    .select()
+    .single();
+
+  if(error){
+    console.error(error);
+    return;
+  }
+
+  S.me = data;
+
   await loadMembers();
+
   render();
 }
-
 function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){

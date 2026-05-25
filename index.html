@@ -397,7 +397,9 @@ function showEmojiPicker(){
     const btn=document.createElement('button');
     btn.textContent=e;
     btn.style.cssText='font-size:22px;background:none;border:none;cursor:pointer;padding:3px;border-radius:6px;line-height:1.2';
-    btn.onclick=()=>pickEmoji(e);
+    btn.onclick=function(){
+  pickEmoji(btn.textContent);
+};
     grid.appendChild(btn);
   });
   box.appendChild(grid);
@@ -412,6 +414,7 @@ function showEmojiPicker(){
 }
 
 async function pickEmoji(emoji){
+  alert("選ばれた絵文字: " + emoji);
   alert(JSON.stringify(S.me));
   const wrap=document.getElementById('emoji-overlay');
   if(wrap)wrap.remove();

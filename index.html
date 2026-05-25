@@ -153,6 +153,7 @@ const S={
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,
+  allowedNames:[]
 };
 let rtChannel=null;
 
@@ -352,7 +353,7 @@ async function changeRole(name,role){
 }
 
 async function kickMember(name){
-  if(!confirm(`${name}さんを場から除きますか？`))return;
+  if(!confirm(`${name}さんを场から除きますか？`))return;
   await sb.from('members').delete().eq('name',name);
   await loadMembers();render();
 }
@@ -401,7 +402,7 @@ function renderLogin(){
         <label>合言葉（設定されている場合）</label>
         <input id="l-pass" type="password" placeholder="合言葉を入力" style="font-size:15px;padding:10px 12px" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
-      <button class="btn-p" onclick="doLogin()" style="width:100%;padding:10px;font-size:15px">場に入る</button>
+      <button class="btn-p" onclick="doLogin()" style="width:100%;padding:10px;font-size:15px">场に入る</button>
     </div>
   </div>`;
 }
@@ -490,7 +491,6 @@ function renderPost(p){
   const iHana=by.includes(S.me?.name||'');
   const kakis=S.kaki[p.id]||[];
   const openK=S.openKaki[p.id];
-  const pj=JSON.stringify(p).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
   const posterMember=S.members.find(m=>m.name===p.user_name);
   const posterEmoji=posterMember?.emoji||'';
   return `<div class="post-item" id="post-${p.id}">
@@ -645,7 +645,46 @@ function saveSettings(){
   S.view='chat';render();
 }
 
-render();
-</script>
-</body>
+function toggleEmojiPicker(){
+  if(document.getElementById('emoji-modal')){
+    document.getElementById('emoji-modal').remove();
+    return;
+  }
+  const emojis = ['🏮','🌸','🦊','🍡','🍵','👺','⛩️','🎐','🌊','🌙','🎋','🎲','🎨','🐾','🐱','🐰','✨','🔥','💻','🎯'];
+  
+  const div = document.createElement('div');
+  div.id = 'emoji-modal';
+  div.className = 'modal-overlay';
+  div.onclick = (e) => { if(e.target === div) div.remove(); };
+  div.innerHTML = `
+    <div class="modal-box">
+      <h4>己の印（絵文字）を選ぶ</h4>
+      <div class="emoji-grid">
+        ${emojis.map(e => `<button onclick="updateMyEmoji('${e}')">${e}</button>`).join('')}
+      </div>
+      <button class="btn-g" style="width:100%; font-size:12px; padding:6px;" onclick="document.getElementById('emoji-modal').remove()">閉じる</button>
+    </div>
+  `;
+  document.body.appendChild(div);
+}
+
+async function updateMyEmoji(emoji){
+  if(!S.me) return;
+  const { error } = await sb.from('members').update({ emoji }).eq('name', S.me.name);
+  if(!error){
+    S.me.emoji = emoji;
+    const modal = document.getElementById('emoji-modal');
+    if(modal) modal.remove();
+    await loadMembers();
+    await loadPosts();
+    render();
+  } else {
+    alert('印を刻めませんでした：' + error.message);
+  }
+}
+
+window.onload = () => {
+  render();
+};
+</script></body>
 </html>

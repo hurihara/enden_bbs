@@ -144,6 +144,7 @@ function ago(ts){
 
 const S={
   screen:'login',me:null,typing:{},
+  unreadChannels:{},
   channels:[],posts:[],kaki:{},
   openKaki:{},activeChId:null,
   pendingImg:null,pendingQuote:null,
@@ -201,9 +202,15 @@ async function loadAllowedNames(){
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
   rtChannel=sb.channel('enden-rt-'+S.activeChId)
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts',filter:`channel_id=eq.${S.activeChId}`},async()=>{
-      await loadPosts();render();
-    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts',filter:`channel_id=eq.${S.activeChId}`},async(payload)=>{
+  if(payload.new.channel_id !== S.activeChId){
+    S.unreadChannels[payload.new.channel_id]=true;
+  }else{
+    await loadPosts();
+  }
+
+  render();
+})
     .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
       if(!S.posts.length)return;
       const ids=S.posts.map(p=>p.id);
@@ -273,6 +280,7 @@ async function doLogin(){
 }
 
 async function switchCh(id){
+  delete S.unreadChannels[id];
   S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
   render();
   await loadPosts();
@@ -482,7 +490,9 @@ function renderSidebar(){
       </div>
       ${S.channels.map(ch=>`
         <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
-          <i class="ti ti-hash"></i><span class="ch-label">${ch.name}</span>
+          <i class="ti ti-hash"></i><span class="ch-label">
+  ${ch.name}${S.unreadChannels[ch.id] ? ' ●' : ''}
+</span>
         </button>`).join('')}
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
       <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">

@@ -189,6 +189,7 @@ async function loadMembers(){
 }
 
 let typingTimer=null;
+let broadcastChannel=null;
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
@@ -204,9 +205,13 @@ function setupRealtime(){
       for(const k of(data||[])){if(!S.kaki[k.post_id])S.kaki[k.post_id]=[];S.kaki[k.post_id].push(k)}
       render();
     })
+    .subscribe();
+
+  if(broadcastChannel)sb.removeChannel(broadcastChannel);
+  broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})
     .on('broadcast',{event:'typing'},(payload)=>{
-      const{name,chId}=payload.payload;
-      if(chId!==S.activeChId||name===S.me?.name)return;
+      const{name}=payload.payload;
+      if(name===S.me?.name)return;
       S.typing[name]=Date.now();
       updateTypingDisplay();
     })
@@ -228,8 +233,8 @@ function updateTypingDisplay(){
 }
 
 function sendTyping(){
-  if(!rtChannel||!S.me)return;
-  rtChannel.send({type:'broadcast',event:'typing',payload:{name:S.me.name,chId:S.activeChId}});
+  if(!broadcastChannel||!S.me)return;
+  broadcastChannel.send({type:'broadcast',event:'typing',payload:{name:S.me.name}});
 }
 
 async function doLogin(){
@@ -281,11 +286,14 @@ async function addChannel(){
 
 async function deleteCh(id){
   if(!confirm('この場を閉じますか？'))return;
-  await sb.from('channels').delete().eq('id',id);
+  const{error}=await sb.from('channels').delete().eq('id',id);
+  if(error){alert('閉じられませんでした：'+error.message);return}
   S.channels=S.channels.filter(c=>c.id!==id);
   if(S.activeChId===id)S.activeChId=S.channels[0]?.id||null;
   S.view='settings';
-  await loadPosts();render();
+  await loadAllowedNames();
+  await loadPosts();
+  render();
 }
 
 async function submitPost(){

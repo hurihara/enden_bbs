@@ -121,7 +121,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 
 <script>
 const SUPA_URL='https://mgqnofmgnvzznfuoxfur.supabase.co';
-const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ncW5vZm1nbnZ6em5mdW94振るuuu...'; // 元のキーのまま使ってね！
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ncW5vZm1nbnZ6em5mdW94ZnVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MDM5OTQsImV4cCI6MjA5NTE3OTk5NH0.F9mw65DEnmwGsHf2iMO2CXktAhGUB7VRn8o-Xud95iI';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
 
 const THEMES=[
@@ -153,7 +153,6 @@ const S={
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,
-  allowedNames:[]
 };
 let rtChannel=null;
 
@@ -491,6 +490,7 @@ function renderPost(p){
   const iHana=by.includes(S.me?.name||'');
   const kakis=S.kaki[p.id]||[];
   const openK=S.openKaki[p.id];
+  const pj=JSON.stringify(p).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
   const posterMember=S.members.find(m=>m.name===p.user_name);
   const posterEmoji=posterMember?.emoji||'';
   return `<div class="post-item" id="post-${p.id}">
@@ -645,53 +645,7 @@ function saveSettings(){
   S.view='chat';render();
 }
 
-// クロード先輩とのバトルの地を整地！絵文字ピッカーを完全実装！
-function toggleEmojiPicker(){
-  // すでに開いていたら閉じる
-  if(document.getElementById('emoji-modal')){
-    document.getElementById('emoji-modal').remove();
-    return;
-  }
-  // 縁電の場の世界観に合う絵文字リスト🌸
-  const emojis = ['🏮','🌸','🦊','🍡','🍵','👺','⛩️','🎐','🌊','🌙','🎋','🎲','🎨','🐾','🐱','🐰','✨','🔥','💻','🎯'];
-  
-  const div = document.createElement('div');
-  div.id = 'emoji-modal';
-  div.className = 'modal-overlay';
-  div.onclick = (e) => { if(e.target === div) div.remove(); }; // 背景クリックで閉じる
-  div.innerHTML = `
-    <div class="modal-box">
-      <h4>己の印（絵文字）を選ぶ</h4>
-      <div class="emoji-grid">
-        ${emojis.map(e => `<button onclick="updateMyEmoji('${e}')">${e}</button>`).join('')}
-      </div>
-      <button class="btn-g" style="width:100%; font-size:12px; padding:6px;" onclick="document.getElementById('emoji-modal').remove()">閉じる</button>
-    </div>
-  `;
-  document.body.appendChild(div);
-}
-
-// 選択した絵文字をSupabaseに保存してリアルタイム反映する関数！
-async function updateMyEmoji(emoji){
-  if(!S.me) return;
-  // Supabaseのmembersテーブルの、自分のレコードのemojiカラムを上書き！
-  const { error } = await sb.from('members').update({ emoji }).eq('name', S.me.name);
-  if(!error){
-    S.me.emoji = emoji;
-    const modal = document.getElementById('emoji-modal');
-    if(modal) modal.remove();
-    await loadMembers(); // メンバー一覧を最新に
-    await loadPosts();   // 投稿一覧を最新にしてアバターに反映
-    render();
-  } else {
-    alert('印を刻めませんでした：' + error.message);
-  }
-}
-
-// 画面が完全にロードされてから初期処理を実行
-window.onload = () => {
-  render();
-};
+render();
 </script>
 </body>
 </html>

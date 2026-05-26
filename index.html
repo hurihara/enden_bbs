@@ -25,7 +25,17 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:var(--bg3);color:var(--text);height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .layout{display:flex;flex:1;overflow:hidden;max-width:860px;width:100%;margin:0 auto;background:var(--bg);border-left:0.5px solid var(--border);border-right:0.5px solid var(--border)}
 .sidebar{width:200px;background:var(--bg2);border-right:0.5px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden}
-@media(max-width:600px){.sidebar{width:52px}.srv-name,.ch-label,.sec-label-text,.sb-name{display:none}.ch-btn{padding:8px;justify-content:center}.ch-btn i{font-size:18px}}
+@media(max-width:600px){
+  .sidebar{display:none;position:fixed;inset:0;z-index:500;width:100%;background:rgba(0,0,0,.4)}
+  .sidebar.open{display:flex}
+  .sidebar-inner{width:240px;height:100%;background:var(--bg2);display:flex;flex-direction:column;overflow:hidden}
+  .hamburger{display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:none;border:none;cursor:pointer;color:var(--text2);font-size:22px;flex-shrink:0}
+  .ch-head{padding-left:4px}
+}
+@media(min-width:601px){
+  .sidebar-inner{display:contents}
+  .hamburger{display:none}
+}
 .srv-head{padding:14px 12px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:9px;flex-shrink:0}
 .srv-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:var(--accent-light);color:var(--accent)}
 .srv-name{font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -151,6 +161,7 @@ const S={
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,allowedNames:[],
   unread:{},
+  sidebarOpen:false,
 };
 let rtChannel=null;
 let broadcastChannel=null;
@@ -464,7 +475,11 @@ function render(){
     document.getElementById('main').innerHTML=renderLogin();
     return;
   }
-  document.getElementById('sidebar').innerHTML=renderSidebar();
+  const sidebarEl=document.getElementById('sidebar');
+  sidebarEl.className='sidebar'+(S.sidebarOpen?' open':'');
+  sidebarEl.innerHTML='<div class="sidebar-inner">'+renderSidebar()+'</div>';
+  // サイドバーの外タップで閉じる
+  sidebarEl.onclick=(e)=>{if(e.target===sidebarEl){S.sidebarOpen=false;render()}};
   document.getElementById('main').innerHTML=renderMain();
   document.getElementById('file-input').onchange=handleImg;
 }
@@ -514,13 +529,13 @@ function renderSidebar(){
         </button>`;
       }).join('')}
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
-      <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">
+      <button class="ch-btn${S.view==='members'?' active':''}" onclick="S.sidebarOpen=false;showMembers()">
         <i class="ti ti-users"></i><span class="ch-label">交友</span>
       </button>
-      <button class="ch-btn${S.view==='invite'?' active':''}" onclick="S.view='invite';render()">
+      <button class="ch-btn${S.view==='invite'?' active':''}" onclick="S.sidebarOpen=false;S.view='invite';render()">
         <i class="ti ti-link"></i><span class="ch-label">招縁の文</span>
       </button>
-      ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
+      ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="S.sidebarOpen=false;openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
     <div class="sb-footer" onclick="showEmojiPicker()" title="アイコンを変える">
       <div class="av" style="width:28px;height:28px;font-size:${myEmoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${myEmoji||ini(S.me?.name)}</div>
@@ -553,6 +568,7 @@ function renderChat(){
     </div>`:'';
   return `
     <div class="ch-head">
+      <button class="hamburger" onclick="S.sidebarOpen=true;render()" aria-label="メニューを開く"><i class="ti ti-menu-2"></i></button>
       <i class="ti ti-hash" style="font-size:15px;color:var(--text3)"></i>
       <span class="ch-head-name">${ch.name}</span>
       <span class="ch-head-desc">${ch.description||''}</span>

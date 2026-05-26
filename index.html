@@ -115,6 +115,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 <input type="file" id="file-input" accept="image/*">
 
 <script>
+// ★★★ 画面の上に無理やり裏側の通信を表示するハッカー魔法！ ★★★
+function debugLog(msg) {
+  let div = document.getElementById('mac-debug');
+  if(!div) {
+    div = document.createElement('div');
+    div.id = 'mac-debug';
+    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:rgba(0,0,0,0.85);color:#0f0;font-size:12px;padding:8px 12px;z-index:99999;max-height:120px;overflow-y:auto;pointer-events:none;';
+    document.body.appendChild(div);
+  }
+  // 新しいメッセージを一番上に追加していくよ！
+  div.innerHTML = `<div style="margin-bottom:2px">・${msg}</div>` + div.innerHTML;
+}
+
 const SUPA_URL='https://mgqnofmgnvzznfuoxfur.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ncW5vZm1nbnZ6em5mdW94ZnVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MDM5OTQsImV4cCI6MjA5NTE3OTk5NH0.F9mw65DEnmwGsHf2iMO2CXktAhGUB7VRn8o-Xud95iI';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
@@ -212,13 +225,15 @@ async function loadAllowedNames(){
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
   
+  debugLog('📡 通信の準備を開始するよ！');
+  
   rtChannel=sb.channel('enden-rt-global-' + Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
       
-      // ★★★ 今回の超絶デバッグ用アラート！ ★★★
+      // ★ ここで黒い画面に文字を出す！
+      debugLog(`🔔 投稿の変更を受信！種類: ${payload.eventType}`);
+
       if (payload.eventType === 'INSERT' && payload.new) {
-        alert(`【受信テスト】キターー！\n書き込んだ人: ${payload.new.user_name}\nこのポップアップが出たら通信は大成功してるよ！`);
-        
         const p = payload.new;
         if (p.channel_id === S.activeChId) {
           S.lastRead[S.activeChId] = Date.now();
@@ -227,6 +242,7 @@ function setupRealtime(){
           await loadPosts();
           render();
         } else if (p.user_name !== S.me?.name) {
+          debugLog(`🔴 別の場（${p.channel_id}）に未読をつける！`);
           const isMention = S.me && (p.text || '').includes(`@${S.me.name}`);
           if (isMention) S.unread[p.channel_id] = 'mention';
           else if (S.unread[p.channel_id] !== 'mention') S.unread[p.channel_id] = 'unread';
@@ -241,6 +257,7 @@ function setupRealtime(){
       }
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
+      debugLog(`🔔 書き入れを受信！`);
       if(!S.posts.length)return;
       const ids=S.posts.map(p=>p.id);
       const{data}=await sb.from('kaki').select('*').in('post_id',ids).order('created_at');
@@ -253,7 +270,11 @@ function setupRealtime(){
       S.me=S.members.find(m=>m.name===S.me?.name)||S.me;
       render();
     })
-    .subscribe();
+    .subscribe((status, err) => {
+      // ★ ここでSupabaseとの接続状態を出す！
+      debugLog(`🔌 接続ステータス: ${status}`);
+      if (err) debugLog(`❌ エラー: ${err.message || '詳細不明'}`);
+    });
 
   if(broadcastChannel)sb.removeChannel(broadcastChannel);
   broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})

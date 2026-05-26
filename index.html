@@ -701,6 +701,7 @@ async function showMembers(){
 
 function renderMembers(){
   return `<div class="panel">
+    <button onclick="S.view='chat';render()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:4px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left" style="font-size:16px"></i>もどる</button>
     <h3>交友 (${S.members.length}人)</h3>
     ${S.members.length===0?'<div style="color:var(--text3);font-size:13px">まだ仲間がいません</div>':''}
     ${S.members.map(m=>{
@@ -726,6 +727,7 @@ function renderMembers(){
 function renderInvite(){
   const url=window.location.href;
   return `<div class="panel">
+    <button onclick="S.view='chat';render()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:4px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left" style="font-size:16px"></i>もどる</button>
     <h3>招縁の文</h3>
     <p style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">このURLを信頼できる人にだけ伝えてください。名前を記すだけで場に入れます。</p>
     <div style="background:var(--bg2);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--text2);word-break:break-all;margin-bottom:10px;border:0.5px solid var(--border)">${url}</div>
@@ -739,6 +741,7 @@ function renderInvite(){
 
 function renderSettings(){
   return `<div class="panel">
+    <button onclick="S.view='chat';render()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:4px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left" style="font-size:16px"></i>もどる</button>
     <h3>場の設え</h3>
     <div class="fl">
       <label>場の名前</label><input id="st-name" value="${S.serverName}">
@@ -849,12 +852,12 @@ async function nameKoi(){
 }
 
 function getKoiStage(count){
-  if(count<10)return{size:40,label:'稚魚',color:'#F4A9A8'};
-  if(count<30)return{size:60,label:'小鯉',color:'#F4C87A'};
-  if(count<60)return{size:85,label:'中鯉',color:'#E07B39'};
-  if(count<100)return{size:110,label:'大鯉',color:'#C0392B'};
-  if(count<150)return{size:130,label:'錦鯉',color:'#8E44AD'};
-  return{size:150,label:'神鯉',color:'#F39C12'};
+  if(count<10)return{scale:0.6,label:'稚魚',color:'#F4A9A8'};
+  if(count<30)return{scale:0.8,label:'小鯉',color:'#F4C87A'};
+  if(count<60)return{scale:1.0,label:'中鯉',color:'#E07B39'};
+  if(count<100)return{scale:1.2,label:'大鯉',color:'#C0392B'};
+  if(count<150)return{scale:1.35,label:'錦鯉',color:'#8E44AD'};
+  return{scale:1.5,label:'神鯉',color:'#F39C12'};
 }
 
 function renderKoi(){
@@ -866,28 +869,26 @@ function renderKoi(){
   const nextStage=[10,30,60,100,150,999].find(n=>n>count);
   const progress=nextStage<999?Math.round((count/nextStage)*100):100;
 
-  // 鯉のSVG（シンプルな魚形）
-  const s=stage.size;
   const c=stage.color;
-  const koiSvg=`<svg id="koi-svg" width="${s*2.2}" height="${s}" viewBox="0 0 220 100" style="transition:transform .3s ease;filter:drop-shadow(0 4px 12px rgba(0,0,0,.15))">
-    <!-- 体 -->
-    <ellipse cx="100" cy="50" rx="80" ry="${Math.min(35,s*0.4)}" fill="${c}"/>
-    <!-- 頭 -->
-    <circle cx="170" cy="50" r="${Math.min(28,s*0.3)}" fill="${c}"/>
-    <!-- 尾ひれ -->
-    <polygon points="20,50 0,25 0,75" fill="${c}" opacity=".8"/>
-    <!-- 背びれ -->
-    <ellipse cx="110" cy="${50-Math.min(35,s*0.4)+5}" rx="30" ry="12" fill="${c}" opacity=".6"/>
-    <!-- 目 -->
-    <circle cx="180" cy="44" r="4" fill="#fff"/>
-    <circle cx="181" cy="44" r="2" fill="#333"/>
-    <!-- 模様（成長したら） -->
-    ${count>=30?`<ellipse cx="90" cy="42" rx="20" ry="14" fill="white" opacity=".3"/>`:''}
-    ${count>=60?`<ellipse cx="120" cy="58" rx="15" ry="10" fill="white" opacity=".25"/>`:''}
-    ${count>=100?`<ellipse cx="70" cy="50" rx="12" ry="18" fill="#FFD700" opacity=".4"/>`:''}
+  const sc=stage.scale||1;
+  const koiSvg=`<svg id="koi-svg" width="${Math.round(160*sc)}" height="${Math.round(80*sc)}" viewBox="0 0 160 80" style="transition:transform .3s ease">
+    <g transform="translate(80,40)">
+      <ellipse cx="0" cy="0" rx="44" ry="18" fill="${c}"/>
+      <circle cx="36" cy="-5" r="17" fill="${c}"/>
+      <path d="M-44,0 L-64,-17 L-64,17 Z" fill="${c}" opacity=".85"/>
+      <ellipse cx="12" cy="-17" rx="17" ry="7" fill="${c}" opacity=".6"/>
+      <ellipse cx="-8" cy="13" rx="13" ry="5" fill="${c}" opacity=".5"/>
+      ${count>=10?`<ellipse cx="8" cy="-5" rx="20" ry="11" fill="white" opacity=".18"/>`:''}
+      ${count>=30?`<ellipse cx="-10" cy="3" rx="12" ry="14" fill="white" opacity=".15"/>`:''}
+      ${count>=60?`<ellipse cx="-20" cy="-3" rx="10" ry="12" fill="white" opacity=".2"/>`:''}
+      ${count>=100?`<ellipse cx="15" cy="8" rx="9" ry="11" fill="#FFD700" opacity=".38"/>`:''}
+      <circle cx="45" cy="-8" r="5.5" fill="white"/>
+      <circle cx="46" cy="-8" r="2.8" fill="#333"/>
+    </g>
   </svg>`;
 
-  return`<div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:24px">
+  return`<div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:12px">
+    <div style="width:100%;text-align:left"><button onclick="S.view='chat';render()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;display:flex;align-items:center;gap:4px;padding:0;margin-bottom:14px"><i class="ti ti-arrow-left" style="font-size:16px"></i>もどる</button></div>
     <h3 style="font-size:16px">淡池</h3>
 
     <!-- 池 -->

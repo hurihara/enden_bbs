@@ -162,6 +162,7 @@ const S={
   members:[],status:null,allowedNames:[],
   unread:{},
   sidebarOpen:false,
+  koi:null,
 };
 let rtChannel=null;
 let broadcastChannel=null;
@@ -306,9 +307,9 @@ async function doLogin(){
   S.me=ex;S.screen='app';
   setStatus('場を読み込んでいます…');
   await loadChannels();
+  await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
-  await loadPosts();
   setupRealtime();
   startUnreadWatch();
   clearStatus();
@@ -467,16 +468,12 @@ function showStatusEditor(){
 async function saveStatus(msg){
   const wrap=document.getElementById('status-overlay');
   if(wrap)wrap.remove();
-  alert('name:'+S.me?.name+' msg:'+msg);
-  if(!S.me||!S.me.name)return;
-  const{error}=await sb.from('members').update({status_msg:msg}).eq('name',S.me.name);
-  if(error){alert('保存失敗：'+error.message);return}
+  await sb.from('members').update({status_msg:msg}).eq('name',S.me.name);
   S.me.status_msg=msg;
   await loadMembers();
-  S.me=S.members.find(m=>m.name===S.me.name)||S.me;
   render();
 }
-  
+
 function showEmojiPicker(){
   const existing=document.getElementById('emoji-overlay');
   if(existing){existing.remove();return}
@@ -586,6 +583,9 @@ function renderSidebar(){
       <button class="ch-btn${S.view==='invite'?' active':''}" onclick="S.sidebarOpen=false;S.view='invite';render()">
         <i class="ti ti-link"></i><span class="ch-label">招縁の文</span>
       </button>
+      <button class="ch-btn${S.view==='koi'?' active':''}" onclick="S.sidebarOpen=false;openKoi()">
+        <i class="ti ti-ripple"></i><span class="ch-label">淡池</span>
+      </button>
       ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="S.sidebarOpen=false;openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
     <div style="border-top:0.5px solid var(--border);flex-shrink:0">
@@ -606,6 +606,7 @@ function renderMain(){
   if(S.view==='members')return renderMembers();
   if(S.view==='invite')return renderInvite();
   if(S.view==='settings')return renderSettings();
+  if(S.view==='koi')return renderKoi();
   return renderChat();
 }
 
@@ -803,6 +804,128 @@ function saveSettings(){
   if(n&&n.value.trim())S.serverName=n.value.trim();
   if(ic&&ic.value.trim())S.serverIcon=ic.value.trim();
   S.view='chat';render();
+}
+
+// 池関連
+async function openKoi(){
+  S.view='koi';
+  render();
+  await loadKoi();
+  render();
+}
+
+async function loadKoi(){
+  const{data}=await sb.from('koi').select('*').limit(1).single();
+  S.koi=data||null;
+}
+
+async function feedKoi(){
+  if(!S.koi)return;
+  const today=new Date().toISOString().slice(0,10);
+  const lastFed=S.koi.last_fed||{};
+  if(lastFed[S.me.name]===today){
+    alert('今日はもう餌をやりました！また明日来てね🐟');
+    return;
+  }
+  const newLastFed={...lastFed,[S.me.name]:today};
+  const newCount=(S.koi.feed_count||0)+1;
+  await sb.from('koi').update({feed_count:newCount,last_fed:newLastFed}).eq('id',S.koi.id);
+  S.koi.feed_count=newCount;
+  S.koi.last_fed=newLastFed;
+  render();
+  // ジャンプアニメ
+  setTimeout(()=>{
+    const k=document.getElementById('koi-svg');
+    if(k){k.style.transform='translateY(-30px)';setTimeout(()=>{k.style.transform='';},400)}
+  },50);
+}
+
+async function nameKoi(){
+  const n=prompt('鯉の名前を変える（今：'+S.koi.name+'）');
+  if(!n||!n.trim())return;
+  await sb.from('koi').update({name:n.trim()}).eq('id',S.koi.id);
+  S.koi.name=n.trim();
+  render();
+}
+
+function getKoiStage(count){
+  if(count<10)return{size:40,label:'稚魚',color:'#F4A9A8'};
+  if(count<30)return{size:60,label:'小鯉',color:'#F4C87A'};
+  if(count<60)return{size:85,label:'中鯉',color:'#E07B39'};
+  if(count<100)return{size:110,label:'大鯉',color:'#C0392B'};
+  if(count<150)return{size:130,label:'錦鯉',color:'#8E44AD'};
+  return{size:150,label:'神鯉',color:'#F39C12'};
+}
+
+function renderKoi(){
+  if(!S.koi)return`<div class="empty"><i class="ti ti-ripple"></i>池を読み込んでいます…</div>`;
+  const count=S.koi.feed_count||0;
+  const stage=getKoiStage(count);
+  const today=new Date().toISOString().slice(0,10);
+  const fedToday=S.koi.last_fed&&S.koi.last_fed[S.me?.name]===today;
+  const nextStage=[10,30,60,100,150,999].find(n=>n>count);
+  const progress=nextStage<999?Math.round((count/nextStage)*100):100;
+
+  // 鯉のSVG（シンプルな魚形）
+  const s=stage.size;
+  const c=stage.color;
+  const koiSvg=`<svg id="koi-svg" width="${s*2.2}" height="${s}" viewBox="0 0 220 100" style="transition:transform .3s ease;filter:drop-shadow(0 4px 12px rgba(0,0,0,.15))">
+    <!-- 体 -->
+    <ellipse cx="100" cy="50" rx="80" ry="${Math.min(35,s*0.4)}" fill="${c}"/>
+    <!-- 頭 -->
+    <circle cx="170" cy="50" r="${Math.min(28,s*0.3)}" fill="${c}"/>
+    <!-- 尾ひれ -->
+    <polygon points="20,50 0,25 0,75" fill="${c}" opacity=".8"/>
+    <!-- 背びれ -->
+    <ellipse cx="110" cy="${50-Math.min(35,s*0.4)+5}" rx="30" ry="12" fill="${c}" opacity=".6"/>
+    <!-- 目 -->
+    <circle cx="180" cy="44" r="4" fill="#fff"/>
+    <circle cx="181" cy="44" r="2" fill="#333"/>
+    <!-- 模様（成長したら） -->
+    ${count>=30?`<ellipse cx="90" cy="42" rx="20" ry="14" fill="white" opacity=".3"/>`:''}
+    ${count>=60?`<ellipse cx="120" cy="58" rx="15" ry="10" fill="white" opacity=".25"/>`:''}
+    ${count>=100?`<ellipse cx="70" cy="50" rx="12" ry="18" fill="#FFD700" opacity=".4"/>`:''}
+  </svg>`;
+
+  return`<div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:24px">
+    <h3 style="font-size:16px">淡池</h3>
+
+    <!-- 池 -->
+    <div style="width:100%;max-width:320px;background:linear-gradient(180deg,#B8E4F7 0%,#7EC8E3 40%,#5BAACC 100%);border-radius:50% 50% 40% 40%;padding:28px 20px;display:flex;align-items:center;justify-content:center;min-height:140px;position:relative;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+      <!-- 水面のきらめき -->
+      <div style="position:absolute;top:12px;left:30px;width:40px;height:4px;background:rgba(255,255,255,.4);border-radius:2px"></div>
+      <div style="position:absolute;top:20px;right:40px;width:24px;height:3px;background:rgba(255,255,255,.3);border-radius:2px"></div>
+      ${koiSvg}
+    </div>
+
+    <!-- 鯉の情報 -->
+    <div style="text-align:center">
+      <div style="font-size:18px;font-weight:500;color:var(--text)">${S.koi.name}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">${stage.label} · 餌 ${count}回</div>
+    </div>
+
+    <!-- 成長バー -->
+    ${nextStage<999?`<div style="width:100%;max-width:280px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+        <span>次の成長まで</span><span>${nextStage-count}回</span>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;height:8px;overflow:hidden">
+        <div style="background:var(--accent);height:100%;width:${progress}%;border-radius:8px;transition:width .3s"></div>
+      </div>
+    </div>`:`<div style="font-size:13px;color:var(--accent);font-weight:500">✨ 最高段階に達しました！</div>`}
+
+    <!-- ボタン -->
+    <div style="display:flex;gap:10px">
+      <button onclick="feedKoi()" style="background:${fedToday?'var(--bg2)':'var(--accent)'};color:${fedToday?'var(--text3)':'#fff'};border:none;border-radius:var(--radius);padding:10px 20px;font-size:14px;cursor:pointer;font-weight:500">
+        ${fedToday?'今日は済み🐟':'🍞 餌をやる'}
+      </button>
+      <button onclick="nameKoi()" style="background:none;border:0.5px solid var(--border2);border-radius:var(--radius);padding:10px 14px;font-size:14px;cursor:pointer;color:var(--text2)">
+        名前を変える
+      </button>
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);text-align:center">みんなで育てる池の鯉です🌿<br>1日1回餌をやれます</div>
+  </div>`;
 }
 
 render();

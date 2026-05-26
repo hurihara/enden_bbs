@@ -308,7 +308,9 @@ async function doLogin(){
 
 async function switchCh(id){
   S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
-  markAsRead(id);
+  S.unread[id]=false;
+  S.lastSeen[id]=Date.now();
+  try{localStorage.setItem('enden_lastseen',JSON.stringify(S.lastSeen))}catch(e){}
   render();
   await loadPosts();
   setupRealtime();

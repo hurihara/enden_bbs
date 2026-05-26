@@ -142,7 +142,6 @@ function ago(ts){
   return Math.floor(d/86400000)+'日前';
 }
 
-
 const savedLastRead = JSON.parse(localStorage.getItem('enden_last_read') || '{}');
 const savedUnread = JSON.parse(localStorage.getItem('enden_unread') || '{}');
 
@@ -162,7 +161,8 @@ function saveUnreadToStorage() {
   localStorage.setItem('enden_last_read', JSON.stringify(S.lastRead));
   localStorage.setItem('enden_unread', JSON.stringify(S.unread));
 }
-  let rtChannel=null;
+
+let rtChannel=null;
 let broadcastChannel=null;
 let typingDisplayTimer=null;
 
@@ -211,15 +211,10 @@ async function loadAllowedNames(){
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
-
-  rtChannel=sb.channel('enden-rt-main-' + Date.now())
+  
+  rtChannel=sb.channel('enden-rt-global-' + Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
-
-      // ★【デバッグ用】裏でデータを受け取ったら画面にポップアップを出すよ！
       if (payload.eventType === 'INSERT' && payload.new) {
-        // ここで強制的にアラートを出して、届いているかチェック！
-        alert(`【受信テスト】誰かが書き込んだよ！\n名前: ${payload.new.user_name}\n場: ${payload.new.channel_id}`);
-
         const p = payload.new;
         if (p.channel_id === S.activeChId) {
           S.lastRead[S.activeChId] = Date.now();
@@ -234,6 +229,11 @@ function setupRealtime(){
           saveUnreadToStorage();
           render();
         }
+      } else if (payload.eventType === 'DELETE' || payload.eventType === 'UPDATE') {
+         if(payload.old && S.posts.some(x => x.id === payload.old.id)) {
+             await loadPosts();
+             render();
+         }
       }
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
@@ -250,17 +250,6 @@ function setupRealtime(){
       render();
     })
     .subscribe();
-
-  if(broadcastChannel)sb.removeChannel(broadcastChannel);
-  broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})
-    .on('broadcast',{event:'typing'},(payload)=>{
-      const{name}=payload.payload;
-      if(name===S.me?.name)return;
-      S.typing[name]=Date.now();
-      updateTypingDisplay();
-    })
-    .subscribe();
-}
 
   if(broadcastChannel)sb.removeChannel(broadcastChannel);
   broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})
@@ -296,31 +285,34 @@ async function doLogin(){
   const pass=(document.getElementById('l-pass').value||'').trim();
   if(!name){setStatus('名を記してください','err');return}
   setStatus('縁を確かめています…');
+  
   const{data:allowed}=await sb.from('allowed_names').select('*').eq('name',name).maybeSingle();
   if(!allowed){setStatus('この名は縁の帳にありません。主に招いてもらってください。','err');return}
   if(allowed.password&&allowed.password!==pass){setStatus('合言葉が違います','err');return}
+  
   let{data:ex}=await sb.from('members').select('*').eq('name',name).maybeSingle();
   if(!ex){
     const{data:cr,error}=await sb.from('members').insert({name,role:'member'}).select().single();
     if(error){setStatus('繋がれませんでした。しばらくしてまた試してください','err');return}
     ex=cr;
   }
+  
   S.me=ex;S.screen='app';
   setStatus('場を読み込んでいます…');
   await loadChannels();
   await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
-  // 追加部分
+  
   if (S.activeChId) {
     S.lastRead[S.activeChId] = Date.now();
     S.unread[S.activeChId] = null;
     saveUnreadToStorage();
   }
+  
   setupRealtime();
   clearStatus();
 }
-
 
 async function switchCh(id){
   S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
@@ -334,6 +326,7 @@ async function switchCh(id){
   setupRealtime();
   render();
 }
+
 async function addChannel(){
   const name=prompt('新しい場の名前：');
   if(!name||!name.trim())return;
@@ -445,17 +438,17 @@ function showEmojiPicker(){
   title.textContent='アイコンを選ぶ';
   title.style.cssText='font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px';
   box.appendChild(title);
+  
   const grid=document.createElement('div');
   grid.style.cssText='display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:10px';
   EMOJI_LIST.forEach(e=>{
     const btn=document.createElement('button');
     btn.textContent=e;
     btn.style.cssText='font-size:22px;background:none;border:none;cursor:pointer;padding:3px;border-radius:6px;line-height:1.2';
-    btn.onclick=function(){
-  pickEmoji(btn.textContent);
-};
+    btn.onclick=function(){ pickEmoji(btn.textContent); };
     grid.appendChild(btn);
   });
+  
   box.appendChild(grid);
   const reset=document.createElement('button');
   reset.textContent='頭文字に戻す';
@@ -468,25 +461,18 @@ function showEmojiPicker(){
 }
 
 async function pickEmoji(emoji){
-  
   const result = await sb
     .from('members')
     .update({ emoji: emoji })
     .eq('name', S.me.name)
     .select();
-
-
-  if(result.error){
-    return;
-  }
-
+  if(result.error) return;
   S.me = result.data[0];
-
   await loadMembers();
-
   render();
-}  
-  function render(){
+}
+
+function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){
     document.getElementById('sidebar').innerHTML='';
@@ -534,8 +520,7 @@ function renderSidebar(){
         <span class="sec-label-text ch-label">場</span>
         ${S.me?.role==='admin'?`<button class="add-btn" onclick="addChannel()" title="場を追加"><i class="ti ti-plus"></i></button>`:''}
       </div>
-
-    
+      
       ${S.channels.map(ch=>{
         let badge = '';
         if (S.unread[ch.id] === 'mention') badge = '<span style="color: #f1c40f; margin-left: auto; font-size: 10px;">🟡</span>';
@@ -545,6 +530,7 @@ function renderSidebar(){
           <i class="ti ti-hash"></i><span class="ch-label" style="flex:1; overflow:hidden; text-overflow:ellipsis;">${ch.name}</span>${badge}
         </button>`;
       }).join('')}
+      
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
       <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">
         <i class="ti ti-users"></i><span class="ch-label">交友</span>
@@ -583,6 +569,7 @@ function renderChat(){
       </div>
       <button class="q-cancel" onclick="S.pendingQuote=null;render()"><i class="ti ti-x"></i></button>
     </div>`:'';
+  
   return `
     <div class="ch-head">
       <i class="ti ti-hash" style="font-size:15px;color:var(--text3)"></i>
@@ -621,8 +608,8 @@ function renderPost(p){
         <span class="uname">${p.user_name}</span>
         ${p.user_role==='admin'?'<span class="badge">主</span>':''}
         <span class="ts">${ago(p.created_at)}</span>
-        ${(S.me?.role==='admin' || p.user_name===S.me?.name) ? `
-        <button onclick="deletePost('${p.id}')" 
+        ${(S.me?.role==='admin' || p.user_name===S.me?.name) ?
+        `<button onclick="deletePost('${p.id}')" 
         style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
       </div>
       ${p.quote?`<div class="quote-blk"><span class="quote-author">${p.quote.user_name}</span>${(p.quote.text||'').slice(0,60)}${(p.quote.text||'').length>60?'…':''}</div>`:''}

@@ -426,6 +426,53 @@ function openLightbox(src){
   document.body.appendChild(lb);
 }
 
+function showStatusEditor(){
+  const existing=document.getElementById('status-overlay');
+  if(existing){existing.remove();return}
+  const wrap=document.createElement('div');
+  wrap.id='status-overlay';
+  wrap.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 70px 10px';
+  const box=document.createElement('div');
+  box.style.cssText='background:#fff;border-radius:14px;padding:14px;width:260px;box-shadow:0 4px 24px rgba(0,0,0,0.18)';
+  const title=document.createElement('div');
+  title.textContent='今日の一言';
+  title.style.cssText='font-size:13px;font-weight:500;color:#1a1a1a;margin-bottom:10px';
+  box.appendChild(title);
+  const input=document.createElement('input');
+  input.type='text';
+  input.placeholder='今の気分は？（例：眠い…🥱）';
+  input.maxLength=40;
+  input.value=S.me?.status_msg||'';
+  input.style.cssText='width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;outline:none;margin-bottom:8px;box-sizing:border-box';
+  box.appendChild(input);
+  const btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:6px';
+  const clearBtn=document.createElement('button');
+  clearBtn.textContent='消す';
+  clearBtn.style.cssText='flex:1;font-size:12px;color:#555;background:none;border:1px solid #ccc;border-radius:8px;padding:7px;cursor:pointer';
+  clearBtn.onclick=()=>saveStatus('');
+  const saveBtn=document.createElement('button');
+  saveBtn.textContent='設定する';
+  saveBtn.style.cssText='flex:2;font-size:13px;color:#fff;background:var(--accent);border:none;border-radius:8px;padding:7px;cursor:pointer;font-weight:500';
+  saveBtn.onclick=()=>saveStatus(input.value.trim());
+  btnRow.appendChild(clearBtn);
+  btnRow.appendChild(saveBtn);
+  box.appendChild(btnRow);
+  wrap.appendChild(box);
+  wrap.onclick=(e)=>{if(e.target===wrap)wrap.remove()};
+  document.body.appendChild(wrap);
+  setTimeout(()=>input.focus(),50);
+}
+
+async function saveStatus(msg){
+  const wrap=document.getElementById('status-overlay');
+  if(wrap)wrap.remove();
+  await sb.from('members').update({status_msg:msg}).eq('name',S.me.name);
+  S.me.status_msg=msg;
+  await loadMembers();
+  render();
+}
+
 function showEmojiPicker(){
   const existing=document.getElementById('emoji-overlay');
   if(existing){existing.remove();return}
@@ -537,10 +584,17 @@ function renderSidebar(){
       </button>
       ${S.me?.role==='admin'?`<button class="ch-btn${S.view==='settings'?' active':''}" onclick="S.sidebarOpen=false;openSettings()"><i class="ti ti-settings"></i><span class="ch-label">場の設え</span></button>`:''}
     </div>
-    <div class="sb-footer" onclick="showEmojiPicker()" title="アイコンを変える">
-      <div class="av" style="width:28px;height:28px;font-size:${myEmoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${myEmoji||ini(S.me?.name)}</div>
-      <span class="sb-name">${S.me?.name||''}${S.me?.role==='admin'?' <span class="badge">主</span>':''}</span>
-      <i class="ti ti-mood-smile" style="font-size:13px;color:var(--text3);flex-shrink:0"></i>
+    <div style="border-top:0.5px solid var(--border);flex-shrink:0">
+      ${S.me?.status_msg?`<div style="padding:4px 12px 0;font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${S.me.status_msg}</div>`:''}
+      <div class="sb-footer" style="border-top:none;padding-top:${S.me?.status_msg?'4px':'10px'}">
+        <div onclick="showEmojiPicker()" style="cursor:pointer" title="アイコンを変える">
+          <div class="av" style="width:28px;height:28px;font-size:${myEmoji?'18':'11'}px;background:${av.bg};color:${av.fg}">${myEmoji||ini(S.me?.name)}</div>
+        </div>
+        <div style="flex:1;overflow:hidden">
+          <div class="sb-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.me?.name||''}${S.me?.role==='admin'?' <span class="badge">主</span>':''}</div>
+        </div>
+        <button onclick="showStatusEditor()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:2px;display:flex;flex-shrink:0" title="今日の一言を設定"><i class="ti ti-pencil"></i></button>
+      </div>
     </div>`;
 }
 
@@ -604,6 +658,7 @@ function renderPost(p){
       <div class="post-meta">
         <span class="uname">${p.user_name}</span>
         ${p.user_role==='admin'?'<span class="badge">主</span>':''}
+        ${posterMember?.status_msg?`<span style="font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;max-width:120px;white-space:nowrap">${posterMember.status_msg}</span>`:''}
         <span class="ts">${ago(p.created_at)}</span>
         ${(S.me?.role==='admin'||p.user_name===S.me?.name)?`<button onclick="deletePost('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
       </div>

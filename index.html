@@ -142,7 +142,7 @@ function ago(ts){
   return Math.floor(d/86400000)+'日前';
 }
 
-// 変更後
+
 const savedLastRead = JSON.parse(localStorage.getItem('enden_last_read') || '{}');
 const savedUnread = JSON.parse(localStorage.getItem('enden_unread') || '{}');
 
@@ -211,7 +211,7 @@ async function loadAllowedNames(){
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
-// 変更後
+
   rtChannel=sb.channel('enden-rt-global')
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
       if (payload.new && payload.new.channel_id === S.activeChId) {
@@ -307,7 +307,7 @@ async function doLogin(){
   clearStatus();
 }
 
-// 変更後
+
 async function switchCh(id){
   S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
   
@@ -520,7 +520,8 @@ function renderSidebar(){
         <span class="sec-label-text ch-label">場</span>
         ${S.me?.role==='admin'?`<button class="add-btn" onclick="addChannel()" title="場を追加"><i class="ti ti-plus"></i></button>`:''}
       </div>
-      // 変更後
+
+    
       ${S.channels.map(ch=>{
         let badge = '';
         if (S.unread[ch.id] === 'mention') badge = '<span style="color: #f1c40f; margin-left: auto; font-size: 10px;">🟡</span>';

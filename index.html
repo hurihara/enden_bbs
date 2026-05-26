@@ -467,12 +467,14 @@ function showStatusEditor(){
 async function saveStatus(msg){
   const wrap=document.getElementById('status-overlay');
   if(wrap)wrap.remove();
-  await sb.from('members').update({status_msg:msg}).eq('name',S.me.name);
+  if(!S.me||!S.me.name)return;
+  const{error}=await sb.from('members').update({status_msg:msg}).eq('name',S.me.name);
+  if(error){alert('保存失敗：'+error.message);return}
   S.me.status_msg=msg;
   await loadMembers();
+  S.me=S.members.find(m=>m.name===S.me.name)||S.me;
   render();
 }
-
 function showEmojiPicker(){
   const existing=document.getElementById('emoji-overlay');
   if(existing){existing.remove();return}

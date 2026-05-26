@@ -130,7 +130,7 @@ const AVC=[
   {bg:'#E6F1FB',fg:'#0C447C'},{bg:'#FAEEDA',fg:'#633806'},
   {bg:'#FBEAF0',fg:'#72243E'},{bg:'#EAF3DE',fg:'#27500A'},
 ];
-const EMOJI_LIST=['😀','😄','😊','🥰','😎','🤩','😋','🤔','😴','🥺','😭','😤','🤗','👻','🐱','🐶','🐼','🦊','🐸','🦋','🌸','🌺','🌻','🌈','⭐','🌙','☀️','🍓','🍰','🎮','🎵','🎨','📚','✏️','💫','🔥','💎','🌊','🍀','🦄','🐰','⚠️','🌿'];
+const EMOJI_LIST=['😀','😄','😊','🥰','😎','🤩','😋','🤔','😴','🥺','😭','😤','🤗','👻','🐱','🐶','🐼','🦊','🐸','🦋','🌸','🌺','🌻','🌈','⭐','🌙','☀️','🍓','🍰','🎮','🎵','🎨','📚','✏️','💫','🔥','💎','🌊','🍀','🦄'];
 
 function avc(n){let h=0;for(let c of(n||''))h=(h*31+c.charCodeAt(0))%AVC.length;return AVC[h]}
 function ini(n){return(n||'?')[0].toUpperCase()}
@@ -150,6 +150,8 @@ const S={
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,allowedNames:[],
+  lastSeen:{}, // チャンネルIDごとの最終既読時刻
+  unread:{},   // チャンネルIDごとの未読フラグ
 };
 let rtChannel=null;
 let broadcastChannel=null;
@@ -198,11 +200,30 @@ async function loadAllowedNames(){
   S.allowedNames=data||[];
 }
 
+function markAsRead(chId){
+  S.lastSeen[chId]=Date.now();
+  S.unread[chId]=false;
+  try{localStorage.setItem('enden_lastseen',JSON.stringify(S.lastSeen))}catch(e){}
+}
+
+function loadLastSeen(){
+  try{
+    const saved=localStorage.getItem('enden_lastseen');
+    if(saved)S.lastSeen=JSON.parse(saved);
+  }catch(e){}
+}
+
+function checkUnread(chId,posts){
+  if(chId===S.activeChId)return false;
+  const last=S.lastSeen[chId]||0;
+  return (posts||[]).some(p=>new Date(p.created_at).getTime()>last&&p.user_name!==S.me?.name);
+}
+
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
   rtChannel=sb.channel('enden-rt-'+S.activeChId)
     .on('postgres_changes',{event:'*',schema:'public',table:'posts',filter:`channel_id=eq.${S.activeChId}`},async()=>{
-      await loadPosts();render();
+      await loadPosts();markAsRead(S.activeChId);render();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
       if(!S.posts.length)return;
@@ -215,6 +236,17 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'members'},async()=>{
       await loadMembers();
       S.me=S.members.find(m=>m.name===S.me?.name)||S.me;
+      render();
+    })
+    .subscribe();
+
+  // 全チャンネルの投稿を監視して未読フラグを立てる
+  sb.channel('enden-all-posts')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'posts'},(payload)=>{
+      const chId=payload.new?.channel_id;
+      if(!chId||chId===S.activeChId)return;
+      if(payload.new?.user_name===S.me?.name)return;
+      S.unread[chId]=true;
       render();
     })
     .subscribe();
@@ -268,12 +300,15 @@ async function doLogin(){
   await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
+  loadLastSeen();
+  markAsRead(S.activeChId);
   setupRealtime();
   clearStatus();
 }
 
 async function switchCh(id){
   S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
+  markAsRead(id);
   render();
   await loadPosts();
   setupRealtime();
@@ -397,9 +432,7 @@ function showEmojiPicker(){
     const btn=document.createElement('button');
     btn.textContent=e;
     btn.style.cssText='font-size:22px;background:none;border:none;cursor:pointer;padding:3px;border-radius:6px;line-height:1.2';
-    btn.onclick=function(){
-  pickEmoji(btn.textContent);
-};
+    btn.onclick=()=>pickEmoji(e);
     grid.appendChild(btn);
   });
   box.appendChild(grid);
@@ -414,25 +447,15 @@ function showEmojiPicker(){
 }
 
 async function pickEmoji(emoji){
-  
-  const result = await sb
-    .from('members')
-    .update({ emoji: emoji })
-    .eq('name', S.me.name)
-    .select();
-
-
-  if(result.error){
-    return;
-  }
-
-  S.me = result.data[0];
-
+  const wrap=document.getElementById('emoji-overlay');
+  if(wrap)wrap.remove();
+  await sb.from('members').update({emoji}).eq('name',S.me.name);
+  S.me.emoji=emoji;
   await loadMembers();
-
   render();
-}  
-  function render(){
+}
+
+function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){
     document.getElementById('sidebar').innerHTML='';
@@ -480,10 +503,13 @@ function renderSidebar(){
         <span class="sec-label-text ch-label">場</span>
         ${S.me?.role==='admin'?`<button class="add-btn" onclick="addChannel()" title="場を追加"><i class="ti ti-plus"></i></button>`:''}
       </div>
-      ${S.channels.map(ch=>`
-        <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
-          <i class="ti ti-hash"></i><span class="ch-label">${ch.name}</span>
-        </button>`).join('')}
+      ${S.channels.map(ch=>{
+        const hasUnread=S.unread[ch.id]||checkUnread(ch.id,S.posts);
+        return `<button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
+          <i class="ti ti-hash"></i><span class="ch-label" style="flex:1">${ch.name}</span>
+          ${hasUnread&&S.activeChId!==ch.id?'<span style="width:8px;height:8px;border-radius:50%;background:#E5534B;flex-shrink:0;margin-left:2px"></span>':''}
+        </button>`;
+      }).join('')}
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
       <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">
         <i class="ti ti-users"></i><span class="ch-label">交友</span>
@@ -560,9 +586,7 @@ function renderPost(p){
         <span class="uname">${p.user_name}</span>
         ${p.user_role==='admin'?'<span class="badge">主</span>':''}
         <span class="ts">${ago(p.created_at)}</span>
-        ${(S.me?.role==='admin' || p.user_name===S.me?.name) ? `
-        <button onclick="deletePost('${p.id}')" 
-        style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
+        ${S.me?.role==='admin'&&p.user_name!==S.me?.name?`<button onclick="deletePost('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
       </div>
       ${p.quote?`<div class="quote-blk"><span class="quote-author">${p.quote.user_name}</span>${(p.quote.text||'').slice(0,60)}${(p.quote.text||'').length>60?'…':''}</div>`:''}
       ${p.text?`<div class="post-text">${p.text}</div>`:''}

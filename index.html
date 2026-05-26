@@ -467,6 +467,7 @@ function showStatusEditor(){
 async function saveStatus(msg){
   const wrap=document.getElementById('status-overlay');
   if(wrap)wrap.remove();
+  alert('name:'+S.me?.name+' msg:'+msg);
   if(!S.me||!S.me.name)return;
   const{error}=await sb.from('members').update({status_msg:msg}).eq('name',S.me.name);
   if(error){alert('保存失敗：'+error.message);return}
@@ -475,6 +476,7 @@ async function saveStatus(msg){
   S.me=S.members.find(m=>m.name===S.me.name)||S.me;
   render();
 }
+  
 function showEmojiPicker(){
   const existing=document.getElementById('emoji-overlay');
   if(existing){existing.remove();return}

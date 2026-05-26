@@ -211,41 +211,30 @@ async function loadAllowedNames(){
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
-  
+
   rtChannel=sb.channel('enden-rt-main-' + Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
-      let needRender = false;
-      
-      
+
+      // ★【デバッグ用】裏でデータを受け取ったら画面にポップアップを出すよ！
       if (payload.eventType === 'INSERT' && payload.new) {
+        // ここで強制的にアラートを出して、届いているかチェック！
+        alert(`【受信テスト】誰かが書き込んだよ！\n名前: ${payload.new.user_name}\n場: ${payload.new.channel_id}`);
+
         const p = payload.new;
         if (p.channel_id === S.activeChId) {
-          
           S.lastRead[S.activeChId] = Date.now();
           S.unread[S.activeChId] = null;
           saveUnreadToStorage();
+          await loadPosts();
+          render();
         } else if (p.user_name !== S.me?.name) {
-         
           const isMention = S.me && (p.text || '').includes(`@${S.me.name}`);
           if (isMention) S.unread[p.channel_id] = 'mention';
           else if (S.unread[p.channel_id] !== 'mention') S.unread[p.channel_id] = 'unread';
           saveUnreadToStorage();
-          needRender = true;
+          render();
         }
       }
-
-      
-      let isCurrentCh = false;
-      if (payload.new && payload.new.channel_id === S.activeChId) isCurrentCh = true;
-      else if (payload.old && S.posts.some(x => x.id === payload.old.id)) isCurrentCh = true;
-
-      if (isCurrentCh) {
-        await loadPosts();
-        needRender = true;
-      }
-
-      
-      if (needRender) render();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
       if(!S.posts.length)return;
@@ -261,6 +250,17 @@ function setupRealtime(){
       render();
     })
     .subscribe();
+
+  if(broadcastChannel)sb.removeChannel(broadcastChannel);
+  broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})
+    .on('broadcast',{event:'typing'},(payload)=>{
+      const{name}=payload.payload;
+      if(name===S.me?.name)return;
+      S.typing[name]=Date.now();
+      updateTypingDisplay();
+    })
+    .subscribe();
+}
 
   if(broadcastChannel)sb.removeChannel(broadcastChannel);
   broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})

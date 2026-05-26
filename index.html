@@ -223,60 +223,57 @@ async function loadAllowedNames(){
 }
 
 function setupRealtime(){
-  if(rtChannel)sb.removeChannel(rtChannel);
-  
-  debugLog('📡 通信の準備を開始するよ！');
-  
-  rtChannel=sb.channel('enden-rt-global-' + Date.now())
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
-      
-      // ★ ここで黒い画面に文字を出す！
-      debugLog(`🔔 投稿の変更を受信！種類: ${payload.eventType}`);
-
-      if (payload.eventType === 'INSERT' && payload.new) {
-        const p = payload.new;
-        if (p.channel_id === S.activeChId) {
-          S.lastRead[S.activeChId] = Date.now();
-          S.unread[S.activeChId] = null;
-          saveUnreadToStorage();
-          await loadPosts();
-          render();
-        } else if (p.user_name !== S.me?.name) {
-          debugLog(`🔴 別の場（${p.channel_id}）に未読をつける！`);
-          const isMention = S.me && (p.text || '').includes(`@${S.me.name}`);
-          if (isMention) S.unread[p.channel_id] = 'mention';
-          else if (S.unread[p.channel_id] !== 'mention') S.unread[p.channel_id] = 'unread';
-          saveUnreadToStorage();
-          render();
+  // 🔽 データベース通知（1回繋げばOK！もう壊さない最強の窓口！） 🔽
+  if(!rtChannel){
+    debugLog('📡 データベース通知の準備を開始！');
+    rtChannel=sb.channel('enden-rt-global') // 名前を固定！
+      .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
+        debugLog(`🔔 投稿変更！種類: ${payload.eventType}`);
+        if (payload.eventType === 'INSERT' && payload.new) {
+          const p = payload.new;
+          if (p.channel_id === S.activeChId) {
+            S.lastRead[S.activeChId] = Date.now();
+            S.unread[S.activeChId] = null;
+            saveUnreadToStorage();
+            await loadPosts();
+            render();
+          } else if (p.user_name !== S.me?.name) {
+            debugLog(`🔴 別の場に未読をつける！`);
+            const isMention = S.me && (p.text || '').includes(`@${S.me.name}`);
+            if (isMention) S.unread[p.channel_id] = 'mention';
+            else if (S.unread[p.channel_id] !== 'mention') S.unread[p.channel_id] = 'unread';
+            saveUnreadToStorage();
+            render();
+          }
+        } else if (payload.eventType === 'DELETE' || payload.eventType === 'UPDATE') {
+           if(payload.old && S.posts.some(x => x.id === payload.old.id)) {
+               await loadPosts();
+               render();
+           }
         }
-      } else if (payload.eventType === 'DELETE' || payload.eventType === 'UPDATE') {
-         if(payload.old && S.posts.some(x => x.id === payload.old.id)) {
-             await loadPosts();
-             render();
-         }
-      }
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
-      debugLog(`🔔 書き入れを受信！`);
-      if(!S.posts.length)return;
-      const ids=S.posts.map(p=>p.id);
-      const{data}=await sb.from('kaki').select('*').in('post_id',ids).order('created_at');
-      S.kaki={};
-      for(const k of(data||[])){if(!S.kaki[k.post_id])S.kaki[k.post_id]=[];S.kaki[k.post_id].push(k)}
-      render();
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'members'},async()=>{
-      await loadMembers();
-      S.me=S.members.find(m=>m.name===S.me?.name)||S.me;
-      render();
-    })
-    .subscribe((status, err) => {
-      // ★ ここでSupabaseとの接続状態を出す！
-      debugLog(`🔌 接続ステータス: ${status}`);
-      if (err) debugLog(`❌ エラー: ${err.message || '詳細不明'}`);
-    });
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
+        debugLog(`🔔 書き入れを受信！`);
+        if(!S.posts.length)return;
+        const ids=S.posts.map(p=>p.id);
+        const{data}=await sb.from('kaki').select('*').in('post_id',ids).order('created_at');
+        S.kaki={};
+        for(const k of(data||[])){if(!S.kaki[k.post_id])S.kaki[k.post_id]=[];S.kaki[k.post_id].push(k)}
+        render();
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'members'},async()=>{
+        await loadMembers();
+        S.me=S.members.find(m=>m.name===S.me?.name)||S.me;
+        render();
+      })
+      .subscribe((status, err) => {
+        debugLog(`🔌 DB接続ステータス: ${status}`);
+        if (err) debugLog(`❌ DBエラー: ${err.message || '詳細不明'}`);
+      });
+  }
 
-  if(broadcastChannel)sb.removeChannel(broadcastChannel);
+  // 🔽 タイピング通知（これだけはチャンネルごとに切り替える！） 🔽
+  if(broadcastChannel) sb.removeChannel(broadcastChannel);
   broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})
     .on('broadcast',{event:'typing'},(payload)=>{
       const{name}=payload.payload;
@@ -284,7 +281,9 @@ function setupRealtime(){
       S.typing[name]=Date.now();
       updateTypingDisplay();
     })
-    .subscribe();
+    .subscribe((status) => {
+      debugLog(`⌨️ タイピング接続: ${status}`);
+    });
 }
 
 function updateTypingDisplay(){

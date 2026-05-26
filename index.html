@@ -211,29 +211,43 @@ async function loadAllowedNames(){
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
-
-  rtChannel=sb.channel('enden-rt-global')
+  
+  rtChannel=sb.channel('enden-rt-main-' + Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
-      if (payload.new && payload.new.channel_id === S.activeChId) {
-        await loadPosts();
-        S.lastRead[S.activeChId] = Date.now();
-        saveUnreadToStorage();
-        render();
-        return;
-      }
+      let needRender = false;
+      
+      
       if (payload.eventType === 'INSERT' && payload.new) {
-        const targetChId = payload.new.channel_id;
-        const text = payload.new.text || '';
-        if (payload.new.user_name === S.me?.name) return;
-        
-        const isMention = S.me && text.includes(`@${S.me.name}`);
-        if (isMention) S.unread[targetChId] = 'mention';
-        else if (S.unread[targetChId] !== 'mention') S.unread[targetChId] = 'unread';
-        
-        saveUnreadToStorage();
-        render();
+        const p = payload.new;
+        if (p.channel_id === S.activeChId) {
+          
+          S.lastRead[S.activeChId] = Date.now();
+          S.unread[S.activeChId] = null;
+          saveUnreadToStorage();
+        } else if (p.user_name !== S.me?.name) {
+         
+          const isMention = S.me && (p.text || '').includes(`@${S.me.name}`);
+          if (isMention) S.unread[p.channel_id] = 'mention';
+          else if (S.unread[p.channel_id] !== 'mention') S.unread[p.channel_id] = 'unread';
+          saveUnreadToStorage();
+          needRender = true;
+        }
       }
-    })    .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
+
+      
+      let isCurrentCh = false;
+      if (payload.new && payload.new.channel_id === S.activeChId) isCurrentCh = true;
+      else if (payload.old && S.posts.some(x => x.id === payload.old.id)) isCurrentCh = true;
+
+      if (isCurrentCh) {
+        await loadPosts();
+        needRender = true;
+      }
+
+      
+      if (needRender) render();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
       if(!S.posts.length)return;
       const ids=S.posts.map(p=>p.id);
       const{data}=await sb.from('kaki').select('*').in('post_id',ids).order('created_at');

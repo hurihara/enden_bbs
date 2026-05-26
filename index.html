@@ -142,6 +142,10 @@ function ago(ts){
   return Math.floor(d/86400000)+'日前';
 }
 
+// 変更後
+const savedLastRead = JSON.parse(localStorage.getItem('enden_last_read') || '{}');
+const savedUnread = JSON.parse(localStorage.getItem('enden_unread') || '{}');
+
 const S={
   screen:'login',me:null,typing:{},
   channels:[],posts:[],kaki:{},
@@ -150,8 +154,15 @@ const S={
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,allowedNames:[],
+  lastRead: savedLastRead,
+  unread: savedUnread
 };
-let rtChannel=null;
+
+function saveUnreadToStorage() {
+  localStorage.setItem('enden_last_read', JSON.stringify(S.lastRead));
+  localStorage.setItem('enden_unread', JSON.stringify(S.unread));
+}
+  let rtChannel=null;
 let broadcastChannel=null;
 let typingDisplayTimer=null;
 
@@ -200,11 +211,29 @@ async function loadAllowedNames(){
 
 function setupRealtime(){
   if(rtChannel)sb.removeChannel(rtChannel);
-  rtChannel=sb.channel('enden-rt-'+S.activeChId)
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts',filter:`channel_id=eq.${S.activeChId}`},async()=>{
-      await loadPosts();render();
-    })
-    .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
+// 変更後
+  rtChannel=sb.channel('enden-rt-global')
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
+      if (payload.new && payload.new.channel_id === S.activeChId) {
+        await loadPosts();
+        S.lastRead[S.activeChId] = Date.now();
+        saveUnreadToStorage();
+        render();
+        return;
+      }
+      if (payload.eventType === 'INSERT' && payload.new) {
+        const targetChId = payload.new.channel_id;
+        const text = payload.new.text || '';
+        if (payload.new.user_name === S.me?.name) return;
+        
+        const isMention = S.me && text.includes(`@${S.me.name}`);
+        if (isMention) S.unread[targetChId] = 'mention';
+        else if (S.unread[targetChId] !== 'mention') S.unread[targetChId] = 'unread';
+        
+        saveUnreadToStorage();
+        render();
+      }
+    })    .on('postgres_changes',{event:'*',schema:'public',table:'kaki'},async()=>{
       if(!S.posts.length)return;
       const ids=S.posts.map(p=>p.id);
       const{data}=await sb.from('kaki').select('*').in('post_id',ids).order('created_at');
@@ -268,18 +297,29 @@ async function doLogin(){
   await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
+  // 追加部分
+  if (S.activeChId) {
+    S.lastRead[S.activeChId] = Date.now();
+    S.unread[S.activeChId] = null;
+    saveUnreadToStorage();
+  }
   setupRealtime();
   clearStatus();
 }
 
+// 変更後
 async function switchCh(id){
   S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
+  
+  S.lastRead[id] = Date.now();
+  S.unread[id] = null;
+  saveUnreadToStorage();
+  
   render();
   await loadPosts();
   setupRealtime();
   render();
 }
-
 async function addChannel(){
   const name=prompt('新しい場の名前：');
   if(!name||!name.trim())return;
@@ -480,10 +520,16 @@ function renderSidebar(){
         <span class="sec-label-text ch-label">場</span>
         ${S.me?.role==='admin'?`<button class="add-btn" onclick="addChannel()" title="場を追加"><i class="ti ti-plus"></i></button>`:''}
       </div>
-      ${S.channels.map(ch=>`
-        <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
-          <i class="ti ti-hash"></i><span class="ch-label">${ch.name}</span>
-        </button>`).join('')}
+      // 変更後
+      ${S.channels.map(ch=>{
+        let badge = '';
+        if (S.unread[ch.id] === 'mention') badge = '<span style="color: #f1c40f; margin-left: auto; font-size: 10px;">🟡</span>';
+        else if (S.unread[ch.id] === 'unread') badge = '<span style="color: #e74c3c; margin-left: auto; font-size: 10px;">🔴</span>';
+        return `
+        <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')" style="display:flex; width:100%; align-items:center;">
+          <i class="ti ti-hash"></i><span class="ch-label" style="flex:1; overflow:hidden; text-overflow:ellipsis;">${ch.name}</span>${badge}
+        </button>`;
+      }).join('')}
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
       <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">
         <i class="ti ti-users"></i><span class="ch-label">交友</span>

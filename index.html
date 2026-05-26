@@ -150,27 +150,10 @@ const S={
   view:'chat',themeIdx:0,
   serverName:'縁電の場',serverIcon:'🏮',
   members:[],status:null,allowedNames:[],
-  unread:{},
 };
 let rtChannel=null;
 let broadcastChannel=null;
 let typingDisplayTimer=null;
-
-// 未読管理
-function getLastSeen(chId){
-  try{
-    const d=JSON.parse(localStorage.getItem('enden_ls')||'{}');
-    return d[chId]||0;
-  }catch(e){return 0}
-}
-function setLastSeen(chId){
-  try{
-    const d=JSON.parse(localStorage.getItem('enden_ls')||'{}');
-    d[chId]=Date.now();
-    localStorage.setItem('enden_ls',JSON.stringify(d));
-  }catch(e){}
-  S.unread[chId]=false;
-}
 
 function applyTheme(i){
   const t=THEMES[i||0];
@@ -236,18 +219,6 @@ function setupRealtime(){
     })
     .subscribe();
 
-  // 全チャンネルの新着投稿を監視して未読フラグを立てる
-  sb.channel('enden-unread-watch')
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'posts'},(payload)=>{
-      const chId=payload.new?.channel_id;
-      if(!chId)return;
-      if(chId===S.activeChId)return; // 今見てる場は無視
-      if(payload.new?.user_name===S.me?.name)return; // 自分の投稿は無視
-      S.unread[chId]=true;
-      render();
-    })
-    .subscribe();
-
   if(broadcastChannel)sb.removeChannel(broadcastChannel);
   broadcastChannel=sb.channel('enden-typing-'+S.activeChId,{config:{broadcast:{self:false}}})
     .on('broadcast',{event:'typing'},(payload)=>{
@@ -297,20 +268,14 @@ async function doLogin(){
   await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
-  setLastSeen(S.activeChId);
   setupRealtime();
   clearStatus();
 }
 
 async function switchCh(id){
-  S.activeChId=id;
-  S.view='chat';
-  S.posts=[];
-  S.kaki={};
-  S.openKaki={};
+  S.activeChId=id;S.view='chat';S.posts=[];S.kaki={};S.openKaki={};
   render();
   await loadPosts();
-  setLastSeen(id);
   setupRealtime();
   render();
 }
@@ -413,8 +378,10 @@ function openLightbox(src){
 }
 
 function showEmojiPicker(){
-  const existing=document.getElementById('emoji-overlay');
+  const existing=document.getElementById('emoji-modal');
   if(existing){existing.remove();return}
+  const overlay=document.getElementById('emoji-overlay');
+  if(overlay){overlay.remove();return}
   const wrap=document.createElement('div');
   wrap.id='emoji-overlay';
   wrap.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;justify-content:flex-start;padding:0 0 70px 10px';
@@ -430,7 +397,9 @@ function showEmojiPicker(){
     const btn=document.createElement('button');
     btn.textContent=e;
     btn.style.cssText='font-size:22px;background:none;border:none;cursor:pointer;padding:3px;border-radius:6px;line-height:1.2';
-    btn.onclick=function(){pickEmoji(btn.textContent)};
+    btn.onclick=function(){
+  pickEmoji(btn.textContent);
+};
     grid.appendChild(btn);
   });
   box.appendChild(grid);
@@ -445,16 +414,25 @@ function showEmojiPicker(){
 }
 
 async function pickEmoji(emoji){
-  const wrap=document.getElementById('emoji-overlay');
-  if(wrap)wrap.remove();
-  const result=await sb.from('members').update({emoji}).eq('name',S.me.name).select();
-  if(result.error)return;
-  S.me=result.data[0];
-  await loadMembers();
-  render();
-}
+  
+  const result = await sb
+    .from('members')
+    .update({ emoji: emoji })
+    .eq('name', S.me.name)
+    .select();
 
-function render(){
+
+  if(result.error){
+    return;
+  }
+
+  S.me = result.data[0];
+
+  await loadMembers();
+
+  render();
+}  
+  function render(){
   applyTheme(S.themeIdx);
   if(S.screen==='login'){
     document.getElementById('sidebar').innerHTML='';
@@ -502,14 +480,10 @@ function renderSidebar(){
         <span class="sec-label-text ch-label">場</span>
         ${S.me?.role==='admin'?`<button class="add-btn" onclick="addChannel()" title="場を追加"><i class="ti ti-plus"></i></button>`:''}
       </div>
-      ${S.channels.map(ch=>{
-        const hasUnread=S.unread[ch.id]&&ch.id!==S.activeChId;
-        return `<button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
-          <i class="ti ti-hash"></i>
-          <span class="ch-label" style="flex:1;overflow:hidden;text-overflow:ellipsis">${ch.name}</span>
-          ${hasUnread?'<span style="width:8px;height:8px;border-radius:50%;background:#E5534B;flex-shrink:0"></span>':''}
-        </button>`;
-      }).join('')}
+      ${S.channels.map(ch=>`
+        <button class="ch-btn${S.activeChId===ch.id&&S.view==='chat'?' active':''}" onclick="switchCh('${ch.id}')">
+          <i class="ti ti-hash"></i><span class="ch-label">${ch.name}</span>
+        </button>`).join('')}
       <div class="sec-label" style="margin-top:8px"><span class="sec-label-text">縁</span></div>
       <button class="ch-btn${S.view==='members'?' active':''}" onclick="showMembers()">
         <i class="ti ti-users"></i><span class="ch-label">交友</span>
@@ -586,7 +560,9 @@ function renderPost(p){
         <span class="uname">${p.user_name}</span>
         ${p.user_role==='admin'?'<span class="badge">主</span>':''}
         <span class="ts">${ago(p.created_at)}</span>
-        ${(S.me?.role==='admin'||p.user_name===S.me?.name)?`<button onclick="deletePost('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
+        ${(S.me?.role==='admin' || p.user_name===S.me?.name) ? `
+        <button onclick="deletePost('${p.id}')" 
+        style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text3);margin-left:auto" title="削除"><i class="ti ti-trash"></i></button>`:''}
       </div>
       ${p.quote?`<div class="quote-blk"><span class="quote-author">${p.quote.user_name}</span>${(p.quote.text||'').slice(0,60)}${(p.quote.text||'').length>60?'…':''}</div>`:''}
       ${p.text?`<div class="post-text">${p.text}</div>`:''}

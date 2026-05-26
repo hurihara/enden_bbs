@@ -306,9 +306,9 @@ async function doLogin(){
   S.me=ex;S.screen='app';
   setStatus('場を読み込んでいます…');
   await loadChannels();
-  await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
+  await loadPosts();
   setupRealtime();
   startUnreadWatch();
   clearStatus();

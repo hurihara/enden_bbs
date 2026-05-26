@@ -214,7 +214,11 @@ function setupRealtime(){
   
   rtChannel=sb.channel('enden-rt-global-' + Date.now())
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},async(payload)=>{
+      
+      // ★★★ 今回の超絶デバッグ用アラート！ ★★★
       if (payload.eventType === 'INSERT' && payload.new) {
+        alert(`【受信テスト】キターー！\n書き込んだ人: ${payload.new.user_name}\nこのポップアップが出たら通信は大成功してるよ！`);
+        
         const p = payload.new;
         if (p.channel_id === S.activeChId) {
           S.lastRead[S.activeChId] = Date.now();

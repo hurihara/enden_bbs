@@ -824,7 +824,7 @@ async function loadKoi(){
 
 async function feedKoi(){
   if(!S.koi)return;
-  const today=new Date().toISOString().slice(0,10);
+  const today=new Date().toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'}).replace(/\//g,'-').padStart(10,'0');
   const lastFed=S.koi.last_fed||{};
   if(lastFed[S.me.name]===today){
     alert('今日はもう餌をやりました！また明日来てね🐟');
@@ -864,7 +864,7 @@ function renderKoi(){
   if(!S.koi)return`<div class="empty"><i class="ti ti-ripple"></i>池を読み込んでいます…</div>`;
   const count=S.koi.feed_count||0;
   const stage=getKoiStage(count);
-  const today=new Date().toISOString().slice(0,10);
+  const today=new Date().toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo'}).replace(/\//g,'-').padStart(10,'0');
   const fedToday=S.koi.last_fed&&S.koi.last_fed[S.me?.name]===today;
   const nextStage=[10,30,60,100,150,999].find(n=>n>count);
   const progress=nextStage<999?Math.round((count/nextStage)*100):100;

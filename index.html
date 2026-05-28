@@ -130,8 +130,14 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
   // 名前からダミーメールを生成（日本語対応）
 function nameToEmail(name){
-  const hex=Array.from(name).map(c=>c.charCodeAt(0).toString(16).padStart(4,'0')).join('');
-  return `u${hex}@dummy.enden.com`;
+  // 短いハッシュを生成
+  let hash=5381;
+  for(let i=0;i<name.length;i++){
+    hash=((hash<<5)+hash)+name.charCodeAt(i);
+    hash=hash&hash;
+  }
+  const h=Math.abs(hash).toString(36).padStart(8,'0');
+  return `u${h}@enden.com`;
 }
 
 // 合言葉がない場合のフォールバックパスワード

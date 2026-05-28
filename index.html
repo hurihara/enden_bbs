@@ -640,7 +640,7 @@ function renderChat(){
       <div class="compose-inner">
         <textarea id="compose-text" placeholder="${ch.name}に書き付ける…" rows="1"
           oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px';sendTyping()"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitPost()}"></textarea>
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();submitPost()}"></textarea>
         <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
           <button class="ic-btn" onclick="document.getElementById('file-input').click()" title="絵を添える"><i class="ti ti-photo"></i></button>
           <button class="send-btn" onclick="submitPost()"><i class="ti ti-send" style="font-size:14px"></i></button>

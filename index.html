@@ -128,6 +128,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 const SUPA_URL='https://mgqnofmgnvzznfuoxfur.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ncW5vZm1nbnZ6em5mdW94ZnVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MDM5OTQsImV4cCI6MjA5NTE3OTk5NH0.F9mw65DEnmwGsHf2iMO2CXktAhGUB7VRn8o-Xud95iI';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+  // 名前からダミーメールを生成（日本語対応）
+function nameToEmail(name){
+  const hex=Array.from(name).map(c=>c.charCodeAt(0).toString(16).padStart(4,'0')).join('');
+  return `u${hex}@dummy.enden.com`;
+}
+
+// 合言葉がない場合のフォールバックパスワード
+function getAuthPass(name, inputPass){
+  if(inputPass)return inputPass;
+  return 'enden_' + Array.from(name).map(c=>c.charCodeAt(0).toString(36)).join('') + '_pw';
+}
 
 const THEMES=[
   {name:'紫苑',accent:'#534AB7',light:'#EEEDFE',mid:'#AFA9EC'},
@@ -295,23 +306,54 @@ async function doLogin(){
   const pass=(document.getElementById('l-pass').value||'').trim();
   if(!name){setStatus('名を記してください','err');return}
   setStatus('縁を確かめています…');
+
+  // 1. 縁の帳チェック（ホワイトリスト）
   const{data:allowed}=await sb.from('allowed_names').select('*').eq('name',name).maybeSingle();
   if(!allowed){setStatus('この名は縁の帳にありません。主に招いてもらってください。','err');return}
   if(allowed.password&&allowed.password!==pass){setStatus('合言葉が違います','err');return}
+
+  // 2. Supabase Authでサインイン試行
+  const email=nameToEmail(name);
+  const authPass=getAuthPass(name,pass);
+  let authUser=null;
+
+  const{data:signInData,error:signInError}=await sb.auth.signInWithPassword({email,password:authPass});
+
+  if(signInError){
+    // 初回登録
+    const{data:signUpData,error:signUpError}=await sb.auth.signUp({email,password:authPass});
+    if(signUpError){
+      setStatus('繋がれませんでした：'+signUpError.message,'err');return;
+    }
+    authUser=signUpData.user;
+  }else{
+    authUser=signInData.user;
+  }
+
+  if(!authUser){setStatus('認証に失敗しました','err');return}
+
+  // 3. membersテーブルに登録またはauth_idを更新
   let{data:ex}=await sb.from('members').select('*').eq('name',name).maybeSingle();
   if(!ex){
-    const{data:cr,error}=await sb.from('members').insert({name,role:'member'}).select().single();
-    if(error){setStatus('繋がれませんでした。しばらくしてまた試してください','err');return}
+    const{data:cr,error}=await sb.from('members')
+      .insert({name,role:'member',auth_id:authUser.id})
+      .select().single();
+    if(error){setStatus('メンバー登録に失敗しました','err');return}
     ex=cr;
+  }else if(!ex.auth_id){
+    // 既存ユーザーにauth_idを紐付け
+    await sb.from('members').update({auth_id:authUser.id}).eq('name',name);
+    ex.auth_id=authUser.id;
   }
+
   S.me=ex;S.screen='app';
   setStatus('場を読み込んでいます…');
   await loadChannels();
-  await loadPosts();
   await loadMembers();
   S.me=S.members.find(m=>m.name===ex.name)||ex;
+  await loadPosts();
   setupRealtime();
-  startUnreadWatch();
+  startNotifyChannel();
   clearStatus();
 }
 
@@ -360,7 +402,10 @@ async function submitPost(){
   const text=(el&&el.value.trim())||'';
   if(!text&&!S.pendingImg)return;
   const post={
-    channel_id:S.activeChId,user_name:S.me.name,user_role:S.me.role,
+    channel_id:S.activeChId,
+    user_name:S.me.name,
+    user_role:S.me.role,
+    auth_id:S.me.auth_id,
     text,img_url:S.pendingImg||null,quote:S.pendingQuote||null,
     hana:0,hana_by:[],
   };

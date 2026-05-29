@@ -426,17 +426,20 @@ async function submitPost(){
   }
 }
 
-async function toggleHana(pid){
+async function toggleReaction(pid, emoji){
   const p=S.posts.find(p=>p.id===pid);if(!p)return;
-  const by=p.hana_by||[];
-  let newBy,newCount;
+  const reactions=p.reactions||{};
+  const by=reactions[emoji]||[];
+  let newBy;
   if(by.includes(S.me.name)){
-    newBy=by.filter(n=>n!==S.me.name);newCount=Math.max(0,(p.hana||0)-1);
+    newBy=by.filter(n=>n!==S.me.name);
   }else{
-    newBy=[...by,S.me.name];newCount=(p.hana||0)+1;
+    newBy=[...by,S.me.name];
   }
-  p.hana_by=newBy;p.hana=newCount;render();
-  await sb.from('posts').update({hana:newCount,hana_by:newBy}).eq('id',pid);
+  if(!p.reactions)p.reactions={};
+  p.reactions[emoji]=newBy;
+  render();
+  await sb.from('posts').update({reactions:p.reactions}).eq('id',pid);
 }
 
 async function addKaki(pid){
@@ -729,7 +732,11 @@ function renderPost(p){
       ${p.text?`<div class="post-text">${p.text}</div>`:''}
       ${p.img_url?`<img class="post-img" src="${p.img_url}" alt="添え絵" onclick="openLightbox('${p.img_url}')">`:''}
       <div class="actions">
-        <button class="hana-btn${iHana?' lit':''}" onclick="toggleHana('${p.id}')">🌸 花電${p.hana>0?' '+p.hana:''}</button>
+        ${['🌸','💐','✨','😭','🥰','🎉'].map(emoji=>{
+          const by=(p.reactions&&p.reactions[emoji])||[];
+          const active=by.includes(S.me?.name||'');
+          return `<button class="hana-btn${active?' lit':''}" onclick="toggleReaction('${p.id}','${emoji}')" title="${emoji}">${emoji}${by.length>0?' '+by.length:''}</button>`;
+        }).join('')}
         <button class="act-btn" onclick="S.openKaki['${p.id}']=!S.openKaki['${p.id}'];render()"><i class="ti ti-pencil" style="font-size:11px"></i>書き入れ${kakis.length>0?' '+kakis.length:''}</button>
         <button class="act-btn" onclick="startQuote('${p.id}','返電')"><i class="ti ti-corner-up-left" style="font-size:11px"></i>返電</button>
         <button class="act-btn" onclick="startQuote('${p.id}','引電')"><i class="ti ti-quote" style="font-size:11px"></i>引電</button>

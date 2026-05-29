@@ -179,15 +179,12 @@ const S={
   members:[],status:null,allowedNames:[],
   unread:{},
   sidebarOpen:false,
-  onlineUsers:{},
   koi:null,
 };
 let rtChannel=null;
 let broadcastChannel=null;
 let unreadChannel=null;
 let typingDisplayTimer=null;
-let onlineChannel=null;
-let heartbeatTimer=null;
 
 function applyTheme(i){
   const t=THEMES[i||0];
@@ -258,51 +255,6 @@ function startNotifyChannel(){
       render();
     })
     .subscribe();
-}
- function startOnlineChannel(){
-  if(onlineChannel)return;
-  onlineChannel=sb.channel('enden-online',{config:{broadcast:{self:false}}})
-    .on('broadcast',{event:'online'},(payload)=>{
-      const{name}=payload.payload;
-      if(name===S.me?.name)return;
-      S.onlineUsers[name]=Date.now();
-      render();
-    })
-    .on('broadcast',{event:'offline'},(payload)=>{
-      const{name}=payload.payload;
-      delete S.onlineUsers[name];
-      render();
-    })
-    .subscribe((status)=>{
-    if(status==='SUBSCRIBED'){
-      sendHeartbeat();
-    }
-  });
-
-  // 30秒ごとにハートビート送信
-  heartbeatTimer=setInterval(()=>{
-    sendHeartbeat();
-    // 60秒以上音沙汰ない人をオフライン扱い
-    const now=Date.now();
-    let changed=false;
-    for(const name in S.onlineUsers){
-      if(now-S.onlineUsers[name]>60000){
-        delete S.onlineUsers[name];
-        changed=true;
-      }
-    }
-    if(changed)render();
-  },30000);
-
-  // ページを閉じるときオフライン通知
-  window.addEventListener('beforeunload',()=>{
-    if(onlineChannel)onlineChannel.send({type:'broadcast',event:'offline',payload:{name:S.me?.name}});
-  });
-}
-
-function sendHeartbeat(){
-  if(!onlineChannel||!S.me)return;
-  onlineChannel.send({type:'broadcast',event:'online',payload:{name:S.me.name}});
 }
 
 function setupRealtime(){
@@ -408,7 +360,6 @@ async function doLogin(){
   await loadPosts();
   setupRealtime();
   startNotifyChannel();
-  startOnlineChannel();
   clearStatus();
 }
 
@@ -824,9 +775,9 @@ function renderMembers(){
       return `<div class="mem-row">
         <div class="av" style="width:34px;height:34px;font-size:${me?'20':'13'}px;background:${av.bg};color:${av.fg}">${me||ini(m.name)}</div>
         <div style="flex:1">
-  <div style="font-size:13px;color:var(--text);font-weight:${m.name===S.me?.name?'500':'400'}">${m.name}${m.name===S.me?.name?' (自分)':''}${(S.onlineUsers[m.name]||m.name===S.me?.name)?'<span style="color:#3ba55d;font-size:11px;margin-left:4px">● オンライン</span>':'<span style="color:var(--text3);font-size:11px;margin-left:4px">● オフライン</span>'}</div>
-  <div style="font-size:11px;color:var(--text3)">${m.role==='admin'?'主':'縁者'}</div>
-</div>
+          <div style="font-size:13px;color:var(--text);font-weight:${m.name===S.me?.name?'500':'400'}">${m.name}${m.name===S.me?.name?' (自分)':''}</div>
+          <div style="font-size:11px;color:var(--text3)">${m.role==='admin'?'主':'縁者'}</div>
+        </div>
         ${S.me?.role==='admin'&&m.name!==S.me?.name?`
           <select onchange="changeRole('${m.name}',this.value)" style="font-size:12px;padding:3px 6px;border:0.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text)">
             <option value="member"${m.role!=='admin'?' selected':''}>縁者</option>

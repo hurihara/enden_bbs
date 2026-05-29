@@ -661,9 +661,16 @@ function renderMain(){
   return renderChat();
 }
 
+function renderHamburgerBar(){
+  return `<div class="ch-head" style="border-bottom:0.5px solid var(--border)">
+    <button class="hamburger" onclick="S.sidebarOpen=true;render()"><i class="ti ti-menu-2"></i></button>
+    <span style="font-size:14px;font-weight:500;color:var(--text)">メニュー</span>
+  </div>`;
+}
+
 function renderChat(){
   const ch=S.channels.find(c=>c.id===S.activeChId);
-  if(!ch)return`<div class="empty"><i class="ti ti-torii"></i>場を選んでください</div>`;
+  if(!ch)return`${renderHamburgerBar()}<div class="empty"><i class="ti ti-torii"></i>場を選んでください</div>`;
   const postsHtml=S.posts.length===0
     ?`<div class="empty"><i class="ti ti-torii"></i>${ch.name}へようこそ<br>最初の書き付けをどうぞ</div>`
     :S.posts.map(renderPost).join('');

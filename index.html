@@ -273,10 +273,11 @@ function startNotifyChannel(){
       delete S.onlineUsers[name];
       render();
     })
-    .subscribe(()=>{
-      // 接続したら自分のオンライン状態を送信
+    .subscribe((status)=>{
+    if(status==='SUBSCRIBED'){
       sendHeartbeat();
-    });
+    }
+  });
 
   // 30秒ごとにハートビート送信
   heartbeatTimer=setInterval(()=>{

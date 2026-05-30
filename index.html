@@ -206,7 +206,7 @@ async function loadPosts(){
   if(!S.activeChId)return;
   const{data}=await sb.from('posts').select('*')
     .eq('channel_id',S.activeChId)
-    .order('created_at',{ascending:true}).limit(60);
+    .order('created_at',{ascending:false}).limit(60);
   S.posts=data||[];
   if(S.posts.length){
     const ids=S.posts.map(p=>p.id);
@@ -580,10 +580,10 @@ function render(){
   const sidebarEl=document.getElementById('sidebar');
   sidebarEl.className='sidebar'+(S.sidebarOpen?' open':'');
   sidebarEl.innerHTML='<div class="sidebar-inner">'+renderSidebar()+'</div>';
+  // サイドバーの外タップで閉じる
   sidebarEl.onclick=(e)=>{if(e.target===sidebarEl){S.sidebarOpen=false;render()}};
   document.getElementById('main').innerHTML=renderMain();
   document.getElementById('file-input').onchange=handleImg;
-  setTimeout(()=>{const el=document.getElementById('posts-area');if(el)el.scrollTop=el.scrollHeight;},50);
 }
 
 function renderLogin(){

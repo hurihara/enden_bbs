@@ -676,7 +676,7 @@ function renderChat(){
   if(!ch)return`${renderHamburgerBar()}<div class="empty"><i class="ti ti-torii"></i>場を選んでください</div>`;
   const postsHtml=S.posts.length===0
     ?`<div class="empty"><i class="ti ti-torii"></i>${ch.name}へようこそ<br>最初の書き付けをどうぞ</div>`
-    :S.posts.map(renderPost).join('');
+    :S.posts.slice().reverse().map(renderPost).join('');
   const qprev=S.pendingQuote?`
     <div class="q-prev">
       <div style="flex:1">
